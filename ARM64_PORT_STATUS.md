@@ -95,3 +95,12 @@ A byte-level recheck of the supplied 32 MiB `boot-x657b-live.img` confirms the A
 ## Verified boot header page layout (2026-11-05)
 
 The supplied X657B image is Android boot header v2 with `page_size=2048`. The boot header occupies one page, so the kernel begins at file offset 2048. The 1660-byte v2 header structure fits within that page. A 4096-byte header page belongs to v3/v4. Verified file offsets: kernel 2048, ramdisk 10551296, DTB 11495424. The repository's old v2 notes incorrectly treated the header as two pages; they are corrected in this revision. AOSP documents the v2 one-page layout in [bootimg.h](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/master/include/bootimg/bootimg.h).
+
+
+## ARM64 boot-image packaging prototype (2026-11-05)
+- A local structural test image was assembled from the successful CI `Image.gz`, the supplied X657B boot image's original ramdisk, and its complete 125,165-byte DTB/DTBO container. The source boot image is 32 MiB, Android boot header v2, 2048-byte pages.
+- The candidate sets the kernel load address to the MT6761 reference LK's AArch64 base `0x40080000`, keeps the original ramdisk address `0x51b00000` and DTB/tags address `0x47880000`, and fits the 32 MiB boot partition.
+- Important bootopt correction: the MT6761 reference `platform/common/boot/boot_opt.c` sets `g_is_64bit_kernel` by reading `cmdline[bootopt_offset + 0x12]`, i.e. the kernel-width field in the third bootopt tuple. Stock `bootopt=64S3,32S1,32S1` selects 32-bit; the candidate uses `bootopt=64S3,32S1,64S1` so LK selects its 64-bit path. 
+- The reference LK `app/mt_boot/mt_boot.c` implements gzip decompression and the AArch64 SMC handoff; `platform/mt6761/include/platform/memory_layout.h` defines `LK_KERNEL_64_BASE=0x40080000` and `LK_KERNEL_64_MAX_SIZE=0x07800000`.
+- The candidate carries a newly generated AVB 1.0 footer and an unsigned `algorithm NONE` vbmeta hash descriptor; the OEM-signed vbmeta from the old kernel was not reused. Local structural checks verified the AVB descriptor digest, exact gzip decompression, Android header v2, ramdisk byte-for-byte preservation, DTB/DTBO byte-for-byte preservation, and fixed 32 MiB output size.
+- **Not flash-ready / not device-tested.** The LK sources are a public MT6761 reference, not the exact X657B LK binary. Confirm the actual device's bootopt parsing, 64-bit handoff, fastboot temporary-boot support, real unlock state, and acceptance of unsigned AVB before attempting a test. Display/DTBO compatibility and old vendor module ABI gaps remain open.
