@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - arm64/x657b-defconfig
+      - arm64/x657b-board-overlay
     paths:
       - 'arch/arm64/configs/x657b_arm64_defconfig'
       - '.github/workflows/x657b-arm64.yml'
@@ -59,6 +60,14 @@ jobs:
           grep -qx 'CONFIG_COMPAT=y' out/.config
           grep -qx 'CONFIG_NR_CPUS=4' out/.config
           grep -qx 'CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y' out/.config
+          grep -qx 'CONFIG_MTK_FLASHLIGHT_OCP81373=y' out/.config
+          grep -qx 'CONFIG_LEDS_MT6357=y' out/.config
+          grep -qx 'CONFIG_MTK_FINGERPRINT_SUPPORT=y' out/.config
+          grep -qx 'CONFIG_MTK_CAMERA_ISP=y' out/.config
+          grep -qx 'CONFIG_MTK_SENSORS_1_0=y' out/.config
+          grep -qx 'CONFIG_MTK_THERMAL=y' out/.config
+          grep -Fqx 'CONFIG_MTK_COMBO_CHIP="CONSYS_6761"' out/.config
+          grep -Fqx 'CONFIG_MTK_FINGERPRINT_SELECT="GF318M"' out/.config
 
       - name: Build ARM64 kernel Image
         run: |
@@ -84,13 +93,18 @@ jobs:
           print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
           PY
 
+      - name: Preserve generated config
+        if: always()
+        run: |
+          if [ -f out/.config ]; then cp out/.config out/config.txt; fi
+
       - name: Upload config and build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: x657b-arm64-build-diagnostics
           path: |
-            out/.config
+            out/config.txt
             defconfig.log
             build.log
           if-no-files-found: warn
