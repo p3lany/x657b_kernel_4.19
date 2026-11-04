@@ -93,7 +93,7 @@ extern unsigned int lcm_ldo_vision;
 static const unsigned char LCD_MODULE_ID = 0x01;
 #define LCM_DSI_CMD_MODE	0
 #define FRAME_WIDTH		(720)
-#define FRAME_HEIGHT		(1520)
+#define FRAME_HEIGHT		(1600)
 #define LCM_PHYSICAL_WIDTH		(67608)
 #define LCM_PHYSICAL_HEIGHT		(142728)
 
