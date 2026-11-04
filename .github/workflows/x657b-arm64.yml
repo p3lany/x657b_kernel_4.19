@@ -88,8 +88,8 @@ jobs:
           set -e
           test -s out/arch/arm64/boot/Image
           test -s out/arch/arm64/boot/Image.gz
-          file out/arch/arm64/boot/Image out/arch/arm64/boot/Image.gz
-          python3 - <<'PY'
+          file out/arch/arm64/boot/Image out/arch/arm64/boot/Image.gz | tee verify.log
+          python3 - <<'PY' | tee -a verify.log
           from pathlib import Path
           import gzip, hashlib, struct
           image = Path("out/arch/arm64/boot/Image").read_bytes()
@@ -114,6 +114,7 @@ jobs:
             x657b-arm64.config
             defconfig.log
             build.log
+            verify.log
           if-no-files-found: warn
           include-hidden-files: true
 
