@@ -59,6 +59,11 @@ jobs:
           grep -qx 'CONFIG_COMPAT=y' out/.config
           grep -qx 'CONFIG_NR_CPUS=4' out/.config
           grep -qx 'CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y' out/.config
+          grep -qx 'CONFIG_ANDROID=y' out/.config
+          grep -qx 'CONFIG_ANDROID_BINDER_IPC=y' out/.config
+          grep -qx 'CONFIG_ANDROID_BINDERFS=y' out/.config
+          grep -qx 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' out/.config
+          grep -qx 'CONFIG_ASHMEM=y' out/.config
 
       - name: Build ARM64 kernel Image
         run: |
