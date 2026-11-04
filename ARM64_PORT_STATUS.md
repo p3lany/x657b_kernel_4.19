@@ -83,3 +83,10 @@
 - The boot-image repack plan therefore uses a gzip-compressed ARM64 Image and `kernel_addr=0x40080000`, while retaining the original ramdisk and DTB addresses. This layout has not yet been boot-tested.
 - Board-overlay run #18 exposed the missing TEEI v300 source. The v300 subtree has been restored, and run #21 includes both that source and the `mediatek,touch` TPD binding fix. The Android 11 reference-DTBO inspection completed successfully (run #5) and confirmed the 720x1600 touch overlay.
 - Next gates: complete run #21, inspect generated config and both payloads, audit vendor module vermagic and the missing TRAN hooks, obtain/verify the exact device DTBO and panel selection, then prepare a clearly marked non-flashing boot candidate preserving the original ramdisk and DTB section (including its 64-byte prefix). Validate LK/AVB compatibility before any device test; flashing requires separate explicit approval.
+
+
+## Boot header v2 offset correction (2026-11-05)
+
+A byte-level recheck of the supplied 32 MiB `boot-x657b-live.img` confirms the Android v2 header fields: `recovery_dtbo_size` at offset 1632, `recovery_dtbo_offset` at 1636, `header_size=1660` at 1644, `dtb_size=125165` at 1648, and `dtb_addr=0x47880000` at 1652. The embedded DTB section begins with an Android DTBO v1 container (`0xd7b7ab1e`) whose FDT entry begins at offset 64. Two checked-in repacking notes had incorrectly labeled offset 1644 as a DTBO-size field and offset 1640 as `dtb_size`; those instructions are corrected here. This ordering is defined by the [AOSP boot image header v2](https://source.android.com/docs/core/architecture/bootloader/boot-image-header) and the [AOSP `boot_img_hdr_v2` structure](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/android17-release/include/bootimg/bootimg.h).
+
+**Packaging guardrail:** Preserve the entire Android DTBO v1 wrapper and its FDT entry when reusing this device's boot DTB section. A modified kernel still invalidates the original AVB authentication; no candidate is safe to flash until AVB and bootloader state are verified.
