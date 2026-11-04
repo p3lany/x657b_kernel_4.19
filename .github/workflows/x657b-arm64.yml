@@ -58,6 +58,7 @@ jobs:
           grep -qx 'CONFIG_MACH_MT6761=y' out/.config
           grep -qx 'CONFIG_COMPAT=y' out/.config
           grep -qx 'CONFIG_NR_CPUS=4' out/.config
+          grep -qx 'CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y' out/.config
 
       - name: Build ARM64 kernel Image
         run: |
