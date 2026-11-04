@@ -104,6 +104,7 @@ jobs:
             defconfig.log
             build.log
           if-no-files-found: warn
+          include-hidden-files: true
 
       - name: Upload ARM64 kernel
         if: success()
