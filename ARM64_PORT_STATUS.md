@@ -13,10 +13,10 @@
 - The X657B NT36572 touchscreen driver exists at `drivers/input/touchscreen/nt36572_common/`; the defconfig enables `CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y`.
 - The only matching X657B LCM driver directory in this source tree is `nt36525b_hdp_dsi_vdo_txd_mdt_x657b`; the defconfig selects that driver only.
 
-## Important unresolved hardware detail
+## Panel resolution alignment
 - The X657B ARM32 defconfig specifies a 720x1600 LCM configuration.
-- The selected LCM C driver currently defines `FRAME_WIDTH=720` and `FRAME_HEIGHT=1520`.
-- This 80-pixel height discrepancy must be reconciled against the actual panel/stock DT and display behavior before any boot attempt. Do not silently assume either value is correct.
+- The selected X657B LCM C driver initially declared `FRAME_HEIGHT=1520`, inconsistent with the stock X657B config.
+- The driver was updated to `FRAME_WIDTH=720` and `FRAME_HEIGHT=1600` to match the stock device configuration. This is a source/config consistency correction, not proof of panel operation; final validation still requires matching the live stock panel parameters and a controlled display test.
 
 ## Boot-chain / DT findings
 - The supplied LK-embedded DTB is a valid version-17 DTB and contains MT6761-compatible nodes.
