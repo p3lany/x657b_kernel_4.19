@@ -53,6 +53,12 @@
 - The Android 11 reference LK/boot notes report a short command-line limit and that LK ignores the boot-image cmdline. Preserve the stock `bootopt=64S3,32S1,32S1 buildvariant=user` string and inspect the exact LK image before packaging. Treat the reported limit and fastboot behavior as reference findings until verified against this phone's exact LK.
 - The reference DTBO's `atag,videolfb-lcmname` says `nt35521_hd_dsi_vdo_truly_rt5081_drv`, but the source tree's matching NT35521 driver declares 720x1280 and is not in the stock X657B `CUSTOM_KERNEL_LCM` list. The stock defconfig instead lists NT36525B/NT36672D variants and 720x1600. Keep the X657B-specific NT36525B selection provisional; this panel-name conflict must be resolved from the exact stock DTBO/boot image or live device before claiming display compatibility.
 
+## Confirmed stock vendor module ABI audit (2026-11-04)
+- CI downloaded the public X657B Android 11 vendor module set from `noophyy/vendor_infinix_X657B` branch `eleven` and inspected every shipped `.ko` with `file`, `readelf`, and `modinfo`.
+- All 11 supplied modules are ELF32 ARM/EABI5 with `Machine: ARM` and `vermagic: 4.19.127-gaff2307ea494-dirty SMP preempt mod_unload modversions ARMv7 p2v8`. This includes `wlan_drv_gen4m`, `wmt_drv`, `wmt_chrdev_wifi`, `bt_drv`, `gps_drv`, `fmradio_drv`, `fpsgo`, `kheaders`, `met`, `mt6357-accdet`, and `trace_mmstat`.
+- These prebuilt ARM32 modules cannot be loaded by the new AArch64 kernel. The kernel tree has some corresponding in-tree components (for example BTIF and FPSGO), but does not contain the complete source for the proprietary WMT/WLAN/GPS/FM module stack. Wi-Fi, Bluetooth, GPS, and FM support must therefore be treated as unavailable until compatible ARM64 implementations are built or sourced. The 4.19.127 vendor vermagic also differs from this source tree's 4.19.325 kernel.
+- This does not prevent a controlled first boot test of the AArch64 kernel, but it rules out claiming stock peripheral parity. Do not copy these 32-bit `.ko` files into the ARM64 build or try to force-load them.
+
 ## Android userspace limitation
 - Prior vendor audit found only a small set of 64-bit fingerprint-related vendor libraries; most observed GPU, camera, audio, and MediaTek HAL components are 32-bit.
 - A 64-bit kernel with the existing 32-bit Android userspace is the nearer-term target. A fully 64-bit Android userspace/GSI would require compatible 64-bit vendor components, especially graphics and core HALs.
