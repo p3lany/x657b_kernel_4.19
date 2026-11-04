@@ -31,8 +31,11 @@ ra = struct.unpack_from('<I', stock_hdr, 16)[0]  # ramdisk_size
 ps = struct.unpack_from('<I', stock_hdr, 36)[0]  # page_size
 hv = struct.unpack_from('<I', stock_hdr, 40)[0]  # header_version
 cmdline = stock_hdr[64:1600].split(b'\x00')[0]   # exact cmdline
-dtb_size = struct.unpack_from('<I', stock_hdr, 1640)[0]
-dtbo_size = struct.unpack_from('<I', stock_hdr, 1644)[0]
+recovery_dtbo_size = struct.unpack_from('<I', stock_hdr, 1632)[0]
+recovery_dtbo_offset = struct.unpack_from('<Q', stock_hdr, 1636)[0]
+header_size = struct.unpack_from('<I', stock_hdr, 1644)[0]
+dtb_size = struct.unpack_from('<I', stock_hdr, 1648)[0]
+dtb_addr = struct.unpack_from('<Q', stock_hdr, 1652)[0]
 ```
 
 ## Step 2: Build the Minimal-Diff Image
@@ -42,7 +45,9 @@ Start with the stock header as a bytearray, modify ONLY `kernel_size`:
 ```python
 new_hdr = bytearray(stock_hdr)  # COPY EVERYTHING — cmdline, os_version, name, tail bytes
 struct.pack_into('<I', new_hdr, 8, len(our_kernel))  # only change: kernel_size
-struct.pack_into('<I', new_hdr, 1644, 0)              # dtbo_size=0 (if not copying dtbo)
+# Offset 1644 is header_size (1660), NOT a DTBO-size field. Preserve it.
+# recovery_dtbo_size is at 1632; clear it only if omitting that section.
+struct.pack_into('<I', new_hdr, 1632, 0)
 ```
 
 Pad kernel and ramdisk to page boundaries:
@@ -66,15 +71,16 @@ assert struct.unpack_from('<I', boot_img, 40)[0] == 2  # header v2
 ## Common Pitfalls
 
 ### dtbo_size trap
-If the stock header has `dtbo_size > 0`, the stock boot image has a device tree blob overlay
-AFTER the ramdisk (at a page boundary). If you set `dtbo_size=0` in your image, LK won't
-try to read it. If you keep `dtbo_size` but don't include the data, LK reads garbage.
+If the stock header has `recovery_dtbo_size > 0` at offset 1632, the recovery-DTBO/ACPIO section
+follows the ramdisk (page-aligned), before the v2 DTB section. `header_size` at 1644 is not a
+DTBO-size field. Do not clear it. Preserve the recovery-DTBO section and offset, or clear its
+size only when deliberately omitting that section. Preserve the v2 DTB section using `dtb_size`
+at 1648 and `dtb_addr` at 1652.
 
-**Solution:** Either set `dtbo_size=0`, or extract and splice in the stock DTBO bytes.
-
-### Header tail bytes (offset 1648-4096)
-The stock header v2 has non-zero metadata after the standard fields. COPY THEM when building
-byte-for-byte — LK may read them.
+### Header tail bytes (offset 1660-4096)
+The v2 structure ends at byte 1660; the remaining header-page area is padding/reserved.
+Preserve the complete header area byte-for-byte except fields intentionally updated. The fields
+at 1644, 1648, and 1652 are `header_size`, `dtb_size`, and `dtb_addr` respectively.
 
 ### Kernel larger than stock
 If your zImage is larger than the stock kernel_size, the ramdisk shifts to a later page.
