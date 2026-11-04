@@ -1,0 +1,214 @@
+name: Build X657B ARM64 vendor connectivity modules
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arm64/x657b-board-overlay-v2
+    paths:
+      - '.github/workflows/build-x657b-arm64-connectivity.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x657b-arm64-connectivity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-modules:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    steps:
+      - name: Checkout X657B kernel source
+        uses: actions/checkout@v4
+
+      - name: Checkout MT6761 WMT common source
+        uses: actions/checkout@v4
+        with:
+          repository: MotorolaMobilityLLC/vendor-mediatek-kernel_modules-connectivity-common
+          ref: dd2d236cb46469f4102b8b83855de8bf6557996e
+          path: donors/common
+          fetch-depth: 1
+
+      - name: Checkout MT6761 Wi-Fi adaptor source
+        uses: actions/checkout@v4
+        with:
+          repository: MotorolaMobilityLLC/vendor-mediatek-kernel_modules-connectivity-wlan-adaptor
+          ref: 4370ded09ce824cc21df16f9771bd74220446c22
+          path: donors/adaptor
+          fetch-depth: 1
+
+      - name: Checkout MT6761 Gen4M WLAN source
+        uses: actions/checkout@v4
+        with:
+          repository: MotorolaMobilityLLC/vendor-mediatek-kernel_modules-connectivity-wlan-core-gen4m
+          ref: e07ad500ebb4f963a80609a1698980bffc540e08
+          path: donors/gen4m
+          fetch-depth: 1
+          sparse-checkout: gen4m
+
+      - name: Checkout MT6631 FM source
+        uses: actions/checkout@v4
+        with:
+          repository: MotorolaMobilityLLC/vendor-mediatek-kernel_modules-connectivity-fmradio
+          ref: 61fc56be28c9e2e3d5d41fb2dca7127da5053221
+          path: donors/fmradio
+          fetch-depth: 1
+
+      - name: Checkout X657B connectivity overlays and STP drivers
+        uses: actions/checkout@v4
+        with:
+          repository: annel0/bf7-linux
+          ref: c8734d6a0eaeaa9aeebee8c1f7d66a9258a20d87
+          path: bf7-reference
+          fetch-depth: 1
+          sparse-checkout: |
+            kernel-work/bf7-connectivity-overlay
+            kernel-work/bf7-bluetooth
+            kernel-work/bf7-gps
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential clang-11 lld-11 llvm-11 \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu gcc-arm-linux-gnueabi \
+            flex libelf-dev libssl-dev python3 dwarves device-tree-compiler kmod file
+
+      - name: Generate X657B ARM64 configuration
+        run: |
+          set -euo pipefail
+          make O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- x657b_arm64_defconfig
+          make O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- olddefconfig
+          grep -qx 'CONFIG_ARM64=y' out/.config
+          grep -qx 'CONFIG_COMPAT=y' out/.config
+          grep -qx 'CONFIG_MTK_COMBO=y' out/.config
+          grep -qx 'CONFIG_MTK_COMBO_WIFI=y' out/.config
+          grep -qx 'CONFIG_MTK_COMBO_BT=y' out/.config
+          grep -qx 'CONFIG_MTK_COMBO_GPS=y' out/.config
+          grep -Fqx 'CONFIG_MTK_FM_CHIP="MT6631_FM"' out/.config
+          grep -Fqx 'CONFIG_MICROTRUST_TEE_VERSION="300"' out/.config
+
+      - name: Build ARM64 kernel and in-tree modules
+        run: |
+          set -o pipefail
+          make -j2 O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image modules 2>&1 | tee kernel-modules-build.log
+
+      - name: Stage donor sources and X657B compatibility overlay
+        run: |
+          set -euo pipefail
+          mkdir -p out/src
+          cp -a donors/common out/src/common
+          cp -a donors/adaptor out/src/adaptor
+          cp -a donors/gen4m/gen4m out/src/gen4m
+          cp -a bf7-reference/kernel-work/bf7-connectivity-overlay/. out/src/
+          cp -a bf7-reference/kernel-work/bf7-bluetooth out/src/bf7-bluetooth
+          cp -a bf7-reference/kernel-work/bf7-gps out/src/bf7-gps
+          mkdir -p out/top/vendor/mediatek/kernel_modules/connectivity/wlan/core
+          ln -s "$GITHUB_WORKSPACE/out/src/common" out/top/vendor/mediatek/kernel_modules/connectivity/common
+          ln -s "$GITHUB_WORKSPACE/out/src/adaptor" out/top/vendor/mediatek/kernel_modules/connectivity/adaptor
+          ln -s "$GITHUB_WORKSPACE/out/src/gen4m" out/top/vendor/mediatek/kernel_modules/connectivity/wlan/core/gen4m
+          test -f out/src/common/Kbuild
+          test -f out/src/adaptor/Makefile
+          test -f out/src/gen4m/Makefile
+          test -f out/src/bf7-bluetooth/Makefile
+          test -f out/src/bf7-gps/Makefile
+          test -f donors/fmradio/Kbuild
+          test -f out/Module.symvers
+
+      - name: Build WMT, Wi-Fi, Bluetooth, GPS and FM modules
+        run: |
+          set -euo pipefail
+          TREE="$GITHUB_WORKSPACE"
+          OUT="$GITHUB_WORKSPACE/out"
+          TOP="$OUT/top"
+          SYMS="$OUT/src/common/Module.symvers"
+          KBUILD_ARGS=(
+            ARCH=arm64
+            "CC=clang-11 --target=aarch64-linux-gnu"
+            LD=aarch64-linux-gnu-ld
+            AR=aarch64-linux-gnu-ar
+            NM=aarch64-linux-gnu-nm
+            OBJCOPY=aarch64-linux-gnu-objcopy
+            OBJDUMP=aarch64-linux-gnu-objdump
+            READELF=aarch64-linux-gnu-readelf
+            STRIP=aarch64-linux-gnu-strip
+            CROSS_COMPILE=aarch64-linux-gnu-
+            CLANG_TRIPLE=aarch64-linux-gnu-
+            KERNEL_SRC="$TREE"
+            KERNEL_OUT="$OUT"
+            MTK_PLATFORM=mt6761
+            TARGET_BOARD_PLATFORM=mt6761
+            TARGET_BUILD_VARIANT=user
+            TOP="$TOP"
+          )
+          build_one() {
+            name="$1"; dir="$2"; shift 2
+            echo "=== building $name ==="
+            make -C "$TREE" O="$OUT" M="$dir" "${KBUILD_ARGS[@]}" "$@" modules 2>&1 | tee "$OUT/module-$name.log"
+          }
+          build_one wmt_drv "$OUT/src/common"
+          build_one wmt_chrdev_wifi "$OUT/src/adaptor" KBUILD_EXTRA_SYMBOLS="$SYMS" MODULE_NAME=wmt_chrdev_wifi
+          build_one wlan_drv_gen4m "$OUT/src/gen4m" KBUILD_EXTRA_SYMBOLS="$SYMS" MTK_COMBO_CHIP=CONNAC WLAN_CHIP_ID=6761 CONFIG_MTK_COMBO_WIFI_HIF=axi MTK_ANDROID_WMT=y MODULE_NAME=wlan_drv_gen4m MTK_WLAN_SERVICE_PATH=wlan_service/ MTK_ANDROID_EMI=y
+          build_one bt_drv "$OUT/src/bf7-bluetooth" BF7_CONN="$OUT/src" KBUILD_EXTRA_SYMBOLS="$SYMS"
+          build_one gps_drv "$OUT/src/bf7-gps" BF7_CONN="$OUT/src" KBUILD_EXTRA_SYMBOLS="$SYMS"
+          build_one fmradio_drv "$GITHUB_WORKSPACE/donors/fmradio/Build/mt6631" KBUILD_EXTRA_SYMBOLS="$SYMS" CFG_FM_PLAT=mt6631 CFG_BUILD_CONNAC2=false CFG_FM_CHIP=mt6631 MODULE_NAME=fmradio_drv CONFIG_FM_USER_LOAD=1
+
+      - name: Verify ARM64 module ABI
+        run: |
+          set -euo pipefail
+          mkdir -p module-package
+          cp out/src/common/wmt_drv.ko module-package/
+          cp out/src/adaptor/wmt_chrdev_wifi.ko module-package/
+          cp out/src/gen4m/wlan_drv_gen4m.ko module-package/
+          cp out/src/bf7-bluetooth/bt_drv.ko module-package/
+          cp out/src/bf7-gps/gps_drv.ko module-package/
+          fm_module=$(find donors/fmradio -name 'fmradio_drv*.ko' -type f | head -n 1)
+          test -n "$fm_module"
+          cp "$fm_module" module-package/fmradio_drv.ko
+          krel=$(cat out/include/config/kernel.release)
+          : > module-package/module-abi-report.txt
+          for f in module-package/*.ko; do
+            echo "=== $(basename "$f") ===" | tee -a module-package/module-abi-report.txt
+            file "$f" | tee -a module-package/module-abi-report.txt
+            readelf -h "$f" | grep -E 'Class:|Machine:' | tee -a module-package/module-abi-report.txt
+            vermagic=$(modinfo -F vermagic "$f")
+            echo "vermagic: $vermagic" | tee -a module-package/module-abi-report.txt
+            echo "$vermagic" | grep -q "^$krel "
+            readelf -h "$f" | grep -q 'Class:.*ELF64'
+            readelf -h "$f" | grep -q 'Machine:.*AArch64'
+          done
+          printf '%s\n' bt_drv.ko wmt_drv.ko wmt_chrdev_wifi.ko wlan_drv_gen4m.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
+          printf 'Kernel release: %s\n' "$krel" > module-package/README.txt
+          printf 'Kernel Image SHA-256: ' >> module-package/README.txt
+          sha256sum out/arch/arm64/boot/Image | awk '{print $1}' >> module-package/README.txt
+          printf '\nThese modules are built for this exact ARM64 kernel build. Do not mix with another kernel release. Not a flashable boot image.\n' >> module-package/README.txt
+          sha256sum module-package/*.ko > module-package/SHA256SUMS
+          tar -czf x657b-arm64-connectivity-modules.tar.gz -C module-package .
+
+      - name: Upload kernel module bundle and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-arm64-connectivity-modules
+          path: |
+            x657b-arm64-connectivity-modules.tar.gz
+            module-package/
+            kernel-modules-build.log
+            out/module-*.log
+          if-no-files-found: warn
