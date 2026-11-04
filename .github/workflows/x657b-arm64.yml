@@ -74,7 +74,7 @@ jobs:
             OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
             STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            Image 2>&1 | tee build.log
+            Image Image.gz 2>&1 | tee build.log
 
       - name: Verify output architecture
         run: |
@@ -87,6 +87,11 @@ jobs:
           if len(b) < 64 or b[0x38:0x3c] != b"ARM\x64":
               raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
           print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
+          import gzip
+          packed = Path("out/arch/arm64/boot/Image.gz").read_bytes()
+          if gzip.decompress(packed) != b:
+              raise SystemExit("Image.gz does not decompress byte-for-byte to Image")
+          print(f"Verified gzip Image.gz: {len(packed)} bytes; exact decompression match")
           PY
 
       - name: Upload config and build logs
@@ -104,6 +109,8 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: x657b-arm64-Image
-          path: out/arch/arm64/boot/Image
+          name: x657b-arm64-kernel-images
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
           if-no-files-found: error
