@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a NON-FLASHABLE, unsigned X657B Android boot-v2 test candidate.
+"""Build an UNSIGNED X657B Android boot-v2 test candidate. DO NOT FLASH it.
 
 Preserves the supplied boot image's ramdisk and MTK DTB section (including
 its 64-byte vendor prefix), replaces only the kernel payload, updates the
@@ -163,7 +163,7 @@ def main():
     if end != len(output):
         raise ValueError("unexpected trailing data; AVB/footer must not be copied")
 
-    print("NON-FLASHABLE unsigned test candidate created")
+    print("UNSIGNED test candidate created — DO NOT FLASH")
     print(f"output={output_path} size={len(output)} bytes")
     print(
         f"kernel_gzip={len(kernel)} bytes; decompressed_Image={len(image)} bytes; "
