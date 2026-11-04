@@ -36,7 +36,7 @@
 ## X657B driver coverage audit
 - The ARM64 board-overlay candidate preserves Android core, Binder, BinderFS, 64-bit Binder device names, and Ashmem from the stock config.
 - This checkout contains MT6370 flashlight and MT6357 LED drivers. The LK DTB also has a `mediatek,flashlights_ocp81373` node, but this source tree has no OCP81373 driver or Kconfig symbol; MT6370 is not a substitute.
-- The fingerprint Kconfig exposes `MTK_FINGERPRINT_SUPPORT` and a `GF318M` selector, but the checkout contains no GF318M driver implementation. A selected config flag alone does not provide working fingerprint support.
+- The Microtrust TEEI v300 secure-fingerprint bridge is now included. The checkout still has no standalone GF318M sensor-specific driver under `drivers/input/fingerprint`; the selected `GF318M` config flag alone does not prove the physical sensor path works. Verify the actual TEEI/vendor interface at runtime.
 - Several stock camera project-specific sensor directories are missing. The current candidate selects only the source directories actually present: `s5k3l6_mipi_raw`, `gc8034_mipi_raw`, and `ov8856_mipi_raw`. This is a build-safe partial camera configuration, not proof that every physical camera module is supported.
 - The NT36xxx driver reads its coordinate maximums from touchscreen firmware. Its fallback is 720x1500 if firmware metadata is corrupt, while the panel config is 720x1600; validate the live firmware values and bottom-edge touch behavior before calling the display/touch port complete.
 
