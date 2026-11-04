@@ -26,6 +26,17 @@
 - LK/TEE firmware strings contain references to 64-bit kernel handoff paths, but strings alone do not prove the active handoff path or establish SMC IDs. Those require code-level verification.
 - No kernel has been flashed and no device partitions have been modified.
 
+## X657B driver coverage audit
+- The ARM64 board-overlay candidate preserves Android core, Binder, BinderFS, 64-bit Binder device names, and Ashmem from the stock config.
+- This checkout contains MT6370 flashlight and MT6357 LED drivers. The LK DTB also has a `mediatek,flashlights_ocp81373` node, but this source tree has no OCP81373 driver or Kconfig symbol; MT6370 is not a substitute.
+- The fingerprint Kconfig exposes `MTK_FINGERPRINT_SUPPORT` and a `GF318M` selector, but the checkout contains no GF318M driver implementation. A selected config flag alone does not provide working fingerprint support.
+- Several stock camera project-specific sensor directories are missing. The current candidate selects only the source directories actually present: `s5k3l6_mipi_raw`, `gc8034_mipi_raw`, and `ov8856_mipi_raw`. This is a build-safe partial camera configuration, not proof that every physical camera module is supported.
+- The NT36xxx driver reads its coordinate maximums from touchscreen firmware. Its fallback is 720x1500 if firmware metadata is corrupt, while the panel config is 720x1600; validate the live firmware values and bottom-edge touch behavior before calling the display/touch port complete.
+
+## Boot image layout cross-check
+- The public X657B TWRP BoardConfig records header v2, base `0x40000000`, 2048-byte boot-image page size, ramdisk offset `0x11b00000`, tags offset `0x07880000`, and a 40,894,464-byte boot partition. It also describes 32-bit `TARGET_ARCH=arm` with `TARGET_USES_64_BIT_BINDER=true`, consistent with the 32-bit-userspace/64-bit-kernel intermediate target.
+- That 39 MiB partition value differs from the inspected stock boot image file size of 32 MiB. Keep both facts; use the actual device partition table and original boot header when producing the final image, not the TWRP makefile value alone.
+
 ## Android userspace limitation
 - Prior vendor audit found only a small set of 64-bit fingerprint-related vendor libraries; most observed GPU, camera, audio, and MediaTek HAL components are 32-bit.
 - A 64-bit kernel with the existing 32-bit Android userspace is the nearer-term target. A fully 64-bit Android userspace/GSI would require compatible 64-bit vendor components, especially graphics and core HALs.
@@ -34,6 +45,7 @@
 - GitHub Actions workflow: `.github/workflows/x657b-arm64.yml`
 - It validates the defconfig, builds `Image`, and checks the AArch64 Linux Image magic at byte offset `0x38`.
 - The build workflow uses an explicit Clang AArch64 target and AArch64 GNU binutils; this avoids accidentally invoking a host x86-64 compiler target.
+- The current candidate branch is `arm64/x657b-board-overlay-v2`. It merges the stock board options on top of the Android-ready ARM64 base, retains Binder/Ashmem, removes undefined stock symbols, and limits the camera list to existing source directories.
 - The original X657B ARM32 defconfig enables Android core support, Binder IPC, BinderFS, the `binder,hwbinder,vndbinder` devices, and Ashmem. The initial ARM64 seed had omitted these Android-critical options; they are now explicitly enabled in the ARM64 defconfig and the workflow fails if any disappear after `olddefconfig`.
 - First successful CI ARM64 build: run #5, source commit `fac5942b27f6c9cbfd0134d9ee7d8843614ca7ab`. The uploaded `Image` is 35,561,488 bytes; `file` identifies it as a Linux kernel ARM64 boot executable Image (little-endian, 4K pages), and the `ARM\x64` magic is present at byte offset `0x38`. SHA-256: `8819dc86597892c48a9a681ed4ce8ff984b467510cce711bb96b18ef1a9588fb`.
 - Build #5 logs show the NT36xxx touchscreen objects and selected X657B LCM object were compiled. A later build is checking the cleaned-up Kconfig wiring and explicitly verifies `CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y` survives `olddefconfig`.
@@ -43,4 +55,5 @@
 - The original boot image can be reconstructed byte-for-byte from its header, kernel, ramdisk, DTB section, AVB block and footer. This validates the section parser. Any modified kernel invalidates the original signed AVB hash/signature; do not flash a repacked image until the AVB strategy and bootloader state are verified.
 - A public MT6761 LK source has a memory map that matches the stock boot image's 32-bit kernel (`0x40008000`), DTB (`0x47880000`) and ramdisk (`0x51B00000`) addresses exactly. That map defines the AArch64 kernel base as `0x40080000`, with a maximum kernel/decompression region of `0x07800000` (120 MiB); the [MT6761 platform rules](https://github.com/svoboda18/lk/blob/main/platform/mt6761/rules.mk) set the same `KERNEL_DECOMPRESS_SIZE`, and [LK's memory layout](https://github.com/svoboda18/lk/blob/main/platform/mt6761/include/platform/memory_layout.h) confirms the address limits. The successful ARM64 Image declares an image footprint of 39,292,928 bytes, within that reference limit. The X657B LK binary itself contains gzip-decompression and 64-bit handoff strings. This is strong cross-checking evidence, but the public LK source is a reference build, not a byte-for-byte source match for the phone's LK binary.
 - The boot-image repack plan therefore uses a gzip-compressed ARM64 Image and `kernel_addr=0x40080000`, while retaining the original ramdisk and DTB addresses. This layout has not yet been boot-tested.
-- Next gates: complete the latest clean build, inspect its generated config and image, prepare a clearly marked non-flashing boot candidate, then validate LK/AVB compatibility. Device boot testing requires separate explicit approval.
+- Latest board-overlay CI run #18 is in progress. It checks the selected board options, compiles the X657B touchscreen/LCM/MT6370/MT6357/sensor-hub/camera objects, produces `Image.gz`, and verifies that decompression reproduces the exact AArch64 Image.
+- Next gates: complete run #18, inspect the generated config and both payloads, prepare a clearly marked non-flashing boot candidate while preserving the original DTB section (including its 64-byte prefix), then validate LK/AVB compatibility. Device boot testing requires separate explicit approval.
