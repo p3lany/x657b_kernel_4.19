@@ -4,7 +4,7 @@
 menu "NT36xxx support"
 	depends on INPUT_TOUCHSCREEN
 
-config TOUCHSCREEN_NT36xxx
+config TOUCHSCREEN_MTK_NT36572_COMMON
 	bool "Novatek NT36xxx"
 	help
 	  Say Y here if you have a Novatek NT36xxx touchscreen connected
