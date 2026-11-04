@@ -1,0 +1,89 @@
+name: X657B ARM64 kernel build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arm64/x657b-defconfig
+    paths:
+      - 'arch/arm64/configs/x657b_arm64_defconfig'
+      - '.github/workflows/x657b-arm64.yml'
+      - 'arch/arm64/**'
+      - 'drivers/**'
+      - 'kernel/**'
+      - 'Makefile'
+
+permissions:
+  contents: read
+
+jobs:
+  arm64-config-and-image:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential clang llvm lld \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi flex libelf-dev \
+            libssl-dev python3 dwarves device-tree-compiler
+
+      - name: Generate X657B ARM64 configuration
+        run: |
+          set -o pipefail
+          make O=out ARCH=arm64 LLVM=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            x657b_arm64_defconfig 2>&1 | tee defconfig.log
+          make O=out ARCH=arm64 LLVM=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            olddefconfig 2>&1 | tee -a defconfig.log
+          grep -E '^(CONFIG_ARM64|CONFIG_MACH_MT6761|CONFIG_COMPAT|CONFIG_NR_CPUS)=' out/.config
+          grep -qx 'CONFIG_ARM64=y' out/.config
+          grep -qx 'CONFIG_MACH_MT6761=y' out/.config
+          grep -qx 'CONFIG_COMPAT=y' out/.config
+          grep -qx 'CONFIG_NR_CPUS=4' out/.config
+
+      - name: Build ARM64 kernel Image
+        run: |
+          set -o pipefail
+          make -j2 O=out ARCH=arm64 LLVM=1 \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            Image 2>&1 | tee build.log
+
+      - name: Verify output architecture
+        run: |
+          file out/arch/arm64/boot/Image
+          test -s out/arch/arm64/boot/Image
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("out/arch/arm64/boot/Image")
+          b = p.read_bytes()
+          if len(b) < 64 or b[0x38:0x3c] != b"ARM\\x64":
+              raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
+          print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
+          PY
+
+      - name: Upload config and build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-arm64-build-diagnostics
+          path: |
+            out/.config
+            defconfig.log
+            build.log
+          if-no-files-found: warn
+
+      - name: Upload ARM64 kernel
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-arm64-Image
+          path: out/arch/arm64/boot/Image
+          if-no-files-found: error
