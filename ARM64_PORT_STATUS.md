@@ -27,6 +27,12 @@
 - LK/TEE firmware strings contain references to 64-bit kernel handoff paths, but strings alone do not prove the active handoff path or establish SMC IDs. Those require code-level verification.
 - No kernel has been flashed and no device partitions have been modified.
 
+## Microtrust TEEI v300 restoration
+- The stock X657B defconfig selects `CONFIG_MICROTRUST_TEE_VERSION="300"`. The supplied TEE1 image contains `isee350` and `teeid/300` strings, supporting v300 rather than blindly changing to v400.
+- The original checkout only contained `drivers/tee/teei/400`; that mismatch caused `mtk_idle_select.c` to fail on missing `teei_client_main.h` when the configured include path pointed to v300.
+- Restored the v300 source subtree (85 non-test files) from [danya2271/kuroneko_r_mt6765 at 9c94c431](https://github.com/danya2271/kuroneko_r_mt6765/tree/9c94c431cb4bc0b184ab525bc1619c4b35b9782e/drivers/tee/teei/300). This is a cross-device MT6765 Linux 4.19 source import; CI compilation is the next check, and runtime TEE/SMC compatibility with the X657B TEE1 image remains unproven until device testing.
+- Do not change the X657B TEEI version to 400 simply to bypass a missing include.
+
 ## X657B driver coverage audit
 - The ARM64 board-overlay candidate preserves Android core, Binder, BinderFS, 64-bit Binder device names, and Ashmem from the stock config.
 - This checkout contains MT6370 flashlight and MT6357 LED drivers. The LK DTB also has a `mediatek,flashlights_ocp81373` node, but this source tree has no OCP81373 driver or Kconfig symbol; MT6370 is not a substitute.
@@ -56,5 +62,5 @@
 - The original boot image can be reconstructed byte-for-byte from its header, kernel, ramdisk, DTB section, AVB block and footer. This validates the section parser. Any modified kernel invalidates the original signed AVB hash/signature; do not flash a repacked image until the AVB strategy and bootloader state are verified.
 - A public MT6761 LK source has a memory map that matches the stock boot image's 32-bit kernel (`0x40008000`), DTB (`0x47880000`) and ramdisk (`0x51B00000`) addresses exactly. That map defines the AArch64 kernel base as `0x40080000`, with a maximum kernel/decompression region of `0x07800000` (120 MiB); the [MT6761 platform rules](https://github.com/svoboda18/lk/blob/main/platform/mt6761/rules.mk) set the same `KERNEL_DECOMPRESS_SIZE`, and [LK's memory layout](https://github.com/svoboda18/lk/blob/main/platform/mt6761/include/platform/memory_layout.h) confirms the address limits. The successful ARM64 Image declares an image footprint of 39,292,928 bytes, within that reference limit. The X657B LK binary itself contains gzip-decompression and 64-bit handoff strings. This is strong cross-checking evidence, but the public LK source is a reference build, not a byte-for-byte source match for the phone's LK binary.
 - The boot-image repack plan therefore uses a gzip-compressed ARM64 Image and `kernel_addr=0x40080000`, while retaining the original ramdisk and DTB addresses. This layout has not yet been boot-tested.
-- Latest board-overlay CI run #18 is in progress. It checks the selected board options, compiles the X657B touchscreen/LCM/MT6370/MT6357/sensor-hub/camera objects, produces `Image.gz`, and verifies that decompression reproduces the exact AArch64 Image.
+- Board-overlay run #18 failed at compile because the configured TEEI v300 include directory was absent. The v300 source has now been restored; run #19 is compiling the updated candidate and will validate the X657B objects, `Image.gz`, and exact decompression.
 - Next gates: complete run #18, inspect the generated config and both payloads, prepare a clearly marked non-flashing boot candidate while preserving the original DTB section (including its 64-byte prefix), then validate LK/AVB compatibility. Device boot testing requires separate explicit approval.
