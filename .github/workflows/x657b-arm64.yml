@@ -27,15 +27,19 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential clang llvm lld \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi flex libelf-dev \
-            libssl-dev python3 dwarves device-tree-compiler
+          sudo apt-get install -y bc bison build-essential clang-11 \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu \
+            gcc-arm-linux-gnueabi flex libelf-dev libssl-dev python3 \
+            dwarves device-tree-compiler
 
       - name: Generate X657B ARM64 configuration
         run: |
           set -o pipefail
-          make O=out ARCH=arm64 LLVM=1 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             x657b_arm64_defconfig 2>&1 | tee defconfig.log
           make O=out ARCH=arm64 LLVM=1 \
