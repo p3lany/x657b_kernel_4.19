@@ -29,7 +29,7 @@ Offset  Size  Field
 
 After offset 40:
 - **v0/v1**: header = page_size bytes (typically 2048), cmdline at offset 64, 512 bytes
-- **v2**: header occupies 4096 bytes (two 2048-byte pages); `recovery_dtbo_size` is at offset 1632, `recovery_dtbo_offset` at 1636 (LE u64), `header_size` at 1644, `dtb_size` at 1648, and `dtb_addr` at 1652 (LE u64). The v2 header struct ends at byte 1660.
+- **v2**: header occupies one page (2048 bytes on X657B); `recovery_dtbo_size` is at offset 1632, `recovery_dtbo_offset` at 1636 (LE u64), `header_size` at 1644, `dtb_size` at 1648, and `dtb_addr` at 1652 (LE u64). The v2 header struct ends at byte 1660.
 
 ### Python Extraction Script
 
@@ -51,8 +51,11 @@ def extract_boot_image(img_path, ramdisk_out_path):
         f.seek(40)
         header_version = struct.unpack('<I', f.read(4))[0]
 
-        header_len = 4096 if header_version >= 2 else page_size
-        header_pages = (header_len + page_size - 1) // page_size
+        if header_version > 2:
+            raise NotImplementedError('This extractor handles boot header versions 0, 1, and 2 only')
+        # v0/v1/v2 occupy one page; X657B v2 uses a 2048-byte page.
+        header_len = page_size
+        header_pages = 1
 
         # Kernel offset = after header, page-aligned
         kernel_offset = header_pages * page_size
@@ -192,4 +195,4 @@ MediaTek devices store the DTB in a separate partition (`/dev/block/platform/boo
 
 ### X657B-specific v2 header offset correction
 
-The supplied X657B boot dump confirms `header_size=1660` at offset 1644, `dtb_size=125165` at offset 1648, and `dtb_addr=0x47880000` at offset 1652. Its DTB section starts with an Android DTBO v1 wrapper, not raw FDT magic. Do not use older notes that read `dtb_size` at 1640 or assume the section starts directly with an FDT.
+The supplied X657B boot dump confirms a one-page 2048-byte header area and `header_size=1660` at offset 1644, `dtb_size=125165` at offset 1648, and `dtb_addr=0x47880000` at offset 1652. Its DTB section starts with an Android DTBO v1 wrapper, not raw FDT magic. Do not use older notes that read `dtb_size` at 1640 or assume the section starts directly with an FDT.
