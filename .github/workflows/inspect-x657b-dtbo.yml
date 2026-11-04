@@ -8,6 +8,10 @@ on:
     paths:
       - '.github/workflows/inspect-x657b-dtbo.yml'
 
+concurrency:
+  group: x657b-dtbo-inspect-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -24,11 +28,18 @@ jobs:
         run: |
           mkdir -p reference
           base='https://raw.githubusercontent.com/twrpdtgen/android_device_infinix_Infinix-X657B/vnd_x657b_h6117-user-11-RP1A.200720.011-61713-release-keys/prebuilt'
-          curl -fL "$base/dtb.img" -o reference/dtb.img
-          curl -fL "$base/dtbo.img" -o reference/dtbo.img
-          curl -fL "$base/kernel" -o reference/kernel
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/dtb.img" -o reference/dtb.img
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/dtbo.img" -o reference/dtbo.img
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/kernel" -o reference/kernel
           file reference/* | tee reference/file-types.txt
           sha256sum reference/* | tee reference/sha256.txt
+
+      - name: Upload raw reference images
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-android11-raw-reference
+          path: reference/*.img
+          if-no-files-found: error
 
       - name: Inspect DTB and DTBO contents
         run: |
