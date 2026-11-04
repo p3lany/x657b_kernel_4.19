@@ -92,7 +92,7 @@ jobs:
           p = Path("reference/kernel")
           b = p.read_bytes()
           print("reference kernel bytes:", len(b))
-          print("AArch64 Image magic at 0x38:", b[0x38:0x3c].hex(), b[0x38:0x3c] == b"ARM\\x64")
+          print("AArch64 Image magic at 0x38:", b[0x38:0x3c].hex(), b[0x38:0x3c] == bytes((65, 82, 77, 100)))
           if len(b) >= 40:
               print("ARM32 zImage magic at 0x24:", b[0x24:0x28].hex())
           PY
@@ -103,3 +103,4 @@ jobs:
           name: x657b-android11-dtbo-reference
           path: reference/
           if-no-files-found: error
+
