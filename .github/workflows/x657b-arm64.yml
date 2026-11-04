@@ -64,7 +64,7 @@ jobs:
           from pathlib import Path
           p = Path("out/arch/arm64/boot/Image")
           b = p.read_bytes()
-          if len(b) < 64 or b[0x38:0x3c] != b"ARM\\x64":
+          if len(b) < 64 or b[0x38:0x3c] != b"ARM\x64":
               raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
           print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
           PY
