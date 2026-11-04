@@ -36,7 +36,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           data = Path("reference/dtb.img").read_bytes()
-          magic = b"\\xd0\\x0d\\xfe\\xed"
+          magic = bytes((0xd0, 0x0d, 0xfe, 0xed))
           offset = data.find(magic, 0, 128)
           if offset < 0:
               raise SystemExit("FDT magic not found near start of reference DTB")
@@ -103,4 +103,5 @@ jobs:
           name: x657b-android11-dtbo-reference
           path: reference/
           if-no-files-found: error
+
 
