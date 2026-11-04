@@ -1,0 +1,118 @@
+name: Inspect X657B Android 11 DTBO reference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arm64/x657b-board-overlay-v2
+    paths:
+      - '.github/workflows/inspect-x657b-dtbo.yml'
+
+concurrency:
+  group: x657b-dtbo-inspect-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Install device-tree tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y device-tree-compiler python3
+
+      - name: Download public X657B Android 11 reference images
+        run: |
+          mkdir -p reference
+          base='https://raw.githubusercontent.com/twrpdtgen/android_device_infinix_Infinix-X657B/vnd_x657b_h6117-user-11-RP1A.200720.011-61713-release-keys/prebuilt'
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/dtb.img" -o reference/dtb.img
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/dtbo.img" -o reference/dtbo.img
+          curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 120 "$base/kernel" -o reference/kernel
+          file reference/* | tee reference/file-types.txt
+          sha256sum reference/* | tee reference/sha256.txt
+
+      - name: Upload raw reference images
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-android11-raw-reference
+          path: reference/*.img
+          if-no-files-found: error
+
+      - name: Inspect DTB and DTBO contents
+        run: |
+          set -e
+          python3 - <<'PY'
+          from pathlib import Path
+          data = Path("reference/dtb.img").read_bytes()
+          magic = bytes((0xd0, 0x0d, 0xfe, 0xed))
+          offset = data.find(magic, 0, 128)
+          if offset < 0:
+              raise SystemExit("FDT magic not found near start of reference DTB")
+          Path("reference/dtb-fdt.img").write_bytes(data[offset:])
+          print("DTB FDT prefix bytes:", offset)
+          PY
+          dtc -I dtb -O dts -o reference/dtb.dts reference/dtb-fdt.img
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+          data = Path("reference/dtbo.img").read_bytes()
+          if len(data) < 32:
+              raise SystemExit("DTBO image too short")
+          fields = struct.unpack_from(">8I", data, 0)
+          magic, total, header_size, entry_size, count, entries_off, page_size, version = fields
+          print("DTBO header:", {
+              "magic": hex(magic), "total_size": total, "header_size": header_size,
+              "entry_size": entry_size, "entry_count": count,
+              "entries_offset": entries_off, "page_size": page_size, "version": version
+          })
+          if magic != 0xd7b7ab1e:
+              raise SystemExit("Unexpected Android DTBO magic")
+          if total > len(data) or entry_size < 32:
+              raise SystemExit("Invalid DTBO header bounds")
+          for i in range(count):
+              off = entries_off + i * entry_size
+              dt_size, dt_off, ident, rev, *custom = struct.unpack_from(">8I", data, off)
+              end = dt_off + dt_size
+              if end > total or dt_size < 40:
+                  raise SystemExit(f"Invalid DTBO entry {i}")
+              blob = data[dt_off:end]
+              if struct.unpack_from(">I", blob, 0)[0] != 0xd00dfeed:
+                  raise SystemExit(f"Entry {i} is not an FDT blob")
+              Path(f"reference/overlay-{i}.dtb").write_bytes(blob)
+              print(f"entry {i}: id={ident:#x} rev={rev:#x} size={dt_size} offset={dt_off:#x} custom={custom}")
+          PY
+          for f in reference/overlay-*.dtb; do
+            [ -f "$f" ] || continue
+            dtc -I dtb -O dts -o "${f%.dtb}.dts" "$f"
+          done
+          {
+            echo '=== DTB TOUCH ==='
+            grep -n -B3 -A12 -E 'compatible = ".*(touch|goodix)|tpd-resolution' reference/dtb.dts || true
+            echo '=== DTBO TOUCH OVERLAYS ==='
+            grep -n -B3 -A12 -E 'compatible = ".*(touch|goodix)|tpd-resolution|target-path = "/touch"' reference/overlay-*.dts || true
+          } | tee reference/touch-binding-report.txt
+
+      - name: Inspect reference kernel architecture
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          p = Path("reference/kernel")
+          b = p.read_bytes()
+          print("reference kernel bytes:", len(b))
+          print("AArch64 Image magic at 0x38:", b[0x38:0x3c].hex(), b[0x38:0x3c] == bytes((65, 82, 77, 100)))
+          if len(b) >= 40:
+              print("ARM32 zImage magic at 0x24:", b[0x24:0x28].hex())
+          PY
+
+      - name: Upload inspection results
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-android11-dtbo-reference
+          path: reference/
+          if-no-files-found: error
+
+

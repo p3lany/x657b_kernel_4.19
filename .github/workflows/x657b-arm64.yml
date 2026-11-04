@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - arm64/x657b-defconfig
+      - arm64/x657b-board-overlay-v2
     paths:
       - 'arch/arm64/configs/x657b_arm64_defconfig'
       - '.github/workflows/x657b-arm64.yml'
@@ -64,6 +65,21 @@ jobs:
           grep -qx 'CONFIG_ANDROID_BINDERFS=y' out/.config
           grep -qx 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' out/.config
           grep -qx 'CONFIG_ASHMEM=y' out/.config
+          grep -qx 'CONFIG_MTK_FLASHLIGHT=y' out/.config
+          grep -qx 'CONFIG_MTK_FLASHLIGHT_MT6370=y' out/.config
+          grep -qx 'CONFIG_MTK_SENSOR_SUPPORT=y' out/.config
+          grep -qx 'CONFIG_MTK_ACCELHUB=y' out/.config
+          grep -qx 'CONFIG_MTK_ALSPSHUB=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_ACCELEROMETER=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_ALSPS=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_SENSORHUB=y' out/.config
+          grep -qx 'CONFIG_LEDS_MT6357=y' out/.config
+          grep -qx 'CONFIG_MTK_FINGERPRINT_SUPPORT=y' out/.config
+          grep -qx 'CONFIG_MTK_CAMERA_ISP=y' out/.config
+          grep -qx 'CONFIG_MTK_THERMAL=y' out/.config
+          grep -Fqx 'CONFIG_MTK_COMBO_CHIP="CONSYS_6761"' out/.config
+          grep -Fqx 'CONFIG_MTK_FINGERPRINT_SELECT="GF318M"' out/.config
+          grep -Fqx 'CONFIG_CUSTOM_KERNEL_IMGSENSOR="s5k3l6_mipi_raw gc8034_mipi_raw ov8856_mipi_raw"' out/.config
 
       - name: Build ARM64 kernel Image
         run: |
@@ -76,18 +92,45 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image 2>&1 | tee build.log
 
+      - name: Verify X657B driver objects
+        run: |
+          grep -q 'drivers/input/touchscreen/nt36572_common/nt36xxx.o' build.log
+          grep -q 'drivers/misc/mediatek/lcm/nt36525b_hdp_dsi_vdo_txd_mdt_x657b/nt36525b_hdp_dsi_vdo_txd_mdt_x657b.o' build.log
+          grep -q 'drivers/misc/mediatek/flashlight/flashlights-mt6370.o' build.log
+          grep -q 'drivers/misc/mediatek/leds/leds-mt6357.o' build.log
+          grep -q 's5k3l6_mipi_raw' build.log
+          grep -q 'gc8034_mipi_raw' build.log
+          grep -q 'ov8856_mipi_raw' build.log
+          grep -q 'accelhub.o' build.log
+          grep -q 'alspshub.o' build.log
+
+      - name: Compress bootloader kernel payload
+        run: gzip -n -9 -c out/arch/arm64/boot/Image > out/arch/arm64/boot/Image.gz
+
       - name: Verify output architecture
         run: |
           file out/arch/arm64/boot/Image
+          file out/arch/arm64/boot/Image.gz
           test -s out/arch/arm64/boot/Image
+          test -s out/arch/arm64/boot/Image.gz
           python3 - <<'PY'
           from pathlib import Path
+          import gzip
           p = Path("out/arch/arm64/boot/Image")
+          gz = Path("out/arch/arm64/boot/Image.gz")
           b = p.read_bytes()
+          uncompressed = gzip.decompress(gz.read_bytes())
           if len(b) < 64 or b[0x38:0x3c] != b"ARM\x64":
               raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
+          if uncompressed != b:
+              raise SystemExit("Compressed payload does not reproduce the exact ARM64 Image")
           print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
+          print(f"Verified gzip payload: {gz.stat().st_size} bytes; exact decompression match")
           PY
+
+      - name: Preserve generated config
+        if: always()
+        run: if [ -f out/.config ]; then cp out/.config out/config.txt; fi
 
       - name: Upload config and build logs
         if: always()
@@ -95,7 +138,7 @@ jobs:
         with:
           name: x657b-arm64-build-diagnostics
           path: |
-            out/.config
+            out/config.txt
             defconfig.log
             build.log
           if-no-files-found: warn
@@ -105,5 +148,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: x657b-arm64-Image
-          path: out/arch/arm64/boot/Image
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
           if-no-files-found: error
