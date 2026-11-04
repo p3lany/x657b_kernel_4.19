@@ -24,7 +24,10 @@ The binary approach gives you full control over every header byte.
 import struct
 
 with open('stock_boot.img', 'rb') as f:
-    stock_hdr = f.read(4096)  # header v2 = 4096 bytes
+    first_page = f.read(2048)  # X657B v2 page size
+    ps = struct.unpack_from('<I', first_page, 36)[0]
+    assert ps == 2048
+    stock_hdr = first_page  # v0/v1/v2 occupy one page, not two
 
 ks = struct.unpack_from('<I', stock_hdr, 8)[0]   # kernel_size
 ra = struct.unpack_from('<I', stock_hdr, 16)[0]  # ramdisk_size
@@ -63,7 +66,7 @@ ramdisk_padded = stock_ramdisk + b'\x00' * (rp * page_size - len(stock_ramdisk))
 Assemble and verify:
 
 ```python
-boot_img = bytes(new_hdr) + kernel_padded + ramdisk_padded
+boot_img = bytes(new_hdr) + kernel_padded + ramdisk_padded  # INCOMPLETE for X657B v2: append the preserved DTB section!
 assert boot_img[0:8] == b'ANDROID!'
 assert struct.unpack_from('<I', boot_img, 40)[0] == 2  # header v2
 ```
@@ -77,8 +80,8 @@ DTBO-size field. Do not clear it. Preserve the recovery-DTBO section and offset,
 size only when deliberately omitting that section. Preserve the v2 DTB section using `dtb_size`
 at 1648 and `dtb_addr` at 1652.
 
-### Header tail bytes (offset 1660-4096)
-The v2 structure ends at byte 1660; the remaining header-page area is padding/reserved.
+### Header tail bytes (offset 1660-2048)
+The X657B v2 structure ends at byte 1660; the remainder of its single 2048-byte header page is padding/reserved. A 4096-byte header page belongs to v3/v4, not v2.
 Preserve the complete header area byte-for-byte except fields intentionally updated. The fields
 at 1644, 1648, and 1652 are `header_size`, `dtb_size`, and `dtb_addr` respectively.
 
@@ -110,3 +113,8 @@ When LK prints "cmdline overflow" before the kernel runs:
 - Compare kernel sizes (stock vs yours) — LK may allocate cmdline buffer differently
 - Check zImage decompressor format (gzip vs lzma vs xz vs none)
 - Try padding/depadding the zImage to match stock size exactly
+
+
+### X657B header-page correction
+
+The supplied X657B image is header v2 with `page_size=2048`. AOSP specifies one page for v2, so the kernel begins at file offset 2048, not 4096. The 1660-byte v2 structure fits in that page. The example assembly above is intentionally incomplete for this X657B image because it does not append the non-empty DTB section; do not use it as a boot-image packager. Preserve the full 125165-byte DTB section (including its Android DTBO v1 wrapper) and account for AVB separately. See [AOSP v2 layout](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/master/include/bootimg/bootimg.h).
