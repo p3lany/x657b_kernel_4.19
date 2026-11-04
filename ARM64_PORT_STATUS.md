@@ -10,7 +10,7 @@
 - `arch/arm64/Kconfig.platforms` defines `MACH_MT6761`.
 - The MT6761 ARM64 platform option selects `ARMV7_COMPAT` and `ARMV7_COMPAT_CPUINFO`, so the source has an AArch32 compatibility path for 32-bit userspace.
 - The experimental X657B config keeps `CONFIG_COMPAT=y` and `CONFIG_NR_CPUS=4`.
-- The X657B NT36572 touchscreen driver exists at `drivers/input/touchscreen/nt36572_common/`; the defconfig enables `CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y`.
+- The original X657B ARM32 defconfig independently confirms `CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y`; the matching NT36572 driver exists at `drivers/input/touchscreen/nt36572_common/`. The ARM64 port now sources that driver's Kconfig correctly and CI explicitly checks that the option survives `olddefconfig`.
 - The only matching X657B LCM driver directory in this source tree is `nt36525b_hdp_dsi_vdo_txd_mdt_x657b`; the defconfig selects that driver only.
 
 ## Panel resolution alignment
@@ -19,7 +19,9 @@
 - The driver was updated to `FRAME_WIDTH=720` and `FRAME_HEIGHT=1600` to match the stock device configuration. This is a source/config consistency correction, not proof of panel operation; final validation still requires matching the live stock panel parameters and a controlled display test.
 
 ## Boot-chain / DT findings
-- The supplied LK-embedded DTB is a valid version-17 DTB and contains MT6761-compatible nodes.
+- The supplied LK-embedded DTB is a valid version-17 DTB. Its root identifies MT6761; it describes four Cortex-A53 CPUs with PSCI enable-method and 512 MiB RAM at `0x40000000`.
+- The source tree also contains `arch/arm64/boot/dts/mediatek/mt6761.dts`; its CPU topology and base RAM range match those core LK-DTB facts. This is encouraging evidence that the SoC's DT description is usable in an AArch64 kernel, not proof that every board node matches.
+- Important discrepancy: the LK-embedded DTB's generic `touch` node uses `mediatek,touch`, while the kernel MT6761 DTS uses `goodix,touch`. The embedded LK DTB therefore must not be treated as a drop-in replacement without checking the actual kernel handoff DTB and touchscreen bindings.
 - A DTB is not intrinsically ARM32 or ARM64; reuse with an AArch64 kernel depends on matching node bindings, addresses, interrupts, clocks, reserved memory, and driver expectations.
 - LK/TEE firmware strings contain references to 64-bit kernel handoff paths, but strings alone do not prove the active handoff path or establish SMC IDs. Those require code-level verification.
 - No kernel has been flashed and no device partitions have been modified.
