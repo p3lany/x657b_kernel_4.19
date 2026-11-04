@@ -50,3 +50,19 @@
 **Bootable ARM64 image:** not yet established.
 **Device test:** not performed for this ARM64 build.
 **Partition changes:** none.
+
+
+## Additional X657B boot-layout reference (2026-11-05)
+
+A public TWRP device tree for the X657B (Android 10-era branch) reports:
+- Android userspace target is 32-bit ARMv7-A / armeabi-v7a + armeabi, with `TARGET_USES_64_BIT_BINDER := true`.
+- MT6761 board platform.
+- Boot header v2, base `0x40000000`, page size 2048.
+- Kernel command line begins `bootopt=64S3,32S1,32S1`.
+- Ramdisk offset `0x11b00000`, tags offset `0x07880000`.
+- Boot and recovery partition sizes are each `40,894,464` bytes (about 39 MiB).
+- The BoardConfig supports an embedded DTB path and an alternate prebuilt-kernel + separate-DTB path; it also references a separate DTBO image.
+
+These are useful board-specific reference values, not proof they match every firmware revision or the user's current partition map. In particular, do not blindly copy these addresses into a repacked image. Compare against the user's actual boot image header, embedded DTB, current LK behavior, and current partition size first.
+
+Reference: https://github.com/twrpdtgen/android_device_infinix_Infinix-X657B/blob/full_x657b_h6117-user-10-QP1A.190711.020-136739-release-keys/BoardConfig.mk
