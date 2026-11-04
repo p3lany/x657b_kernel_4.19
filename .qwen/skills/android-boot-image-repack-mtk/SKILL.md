@@ -29,7 +29,7 @@ Offset  Size  Field
 
 After offset 40:
 - **v0/v1**: header = page_size bytes (typically 2048), cmdline at offset 64, 512 bytes
-- **v2**: header = 4096 bytes, cmdline at offset 64 (1536 bytes), dtb_size at offset 1640 (LE u32)
+- **v2**: header occupies 4096 bytes (two 2048-byte pages); `recovery_dtbo_size` is at offset 1632, `recovery_dtbo_offset` at 1636 (LE u64), `header_size` at 1644, `dtb_size` at 1648, and `dtb_addr` at 1652 (LE u64). The v2 header struct ends at byte 1660.
 
 ### Python Extraction Script
 
@@ -71,14 +71,29 @@ def extract_boot_image(img_path, ramdisk_out_path):
         if header_version >= 2:
             f.seek(0)
             full_hdr = f.read(header_len)
-            dtb_size = struct.unpack_from('<I', full_hdr, 1640)[0]
+            dtb_size = struct.unpack_from('<I', full_hdr, 1648)[0]
+            dtb_addr = struct.unpack_from('<Q', full_hdr, 1652)[0]
+            header_size = struct.unpack_from('<I', full_hdr, 1644)[0]
             if dtb_size > 0:
                 dtb_pages = (ramdisk_size + page_size - 1) // page_size
                 dtb_offset = ramdisk_offset + dtb_pages * page_size
                 f.seek(dtb_offset)
                 dtb_data = f.read(dtb_size)
-                # DTB magic check
-                assert dtb_data[:4] == b'\xd0\x0d\xfe\xed', 'Not FDT'
+                # The X657B section uses an Android DTBO v1 wrapper around an FDT.
+                if dtb_data[:4] == b'\xd0\x0d\xfe\xed':
+                    pass  # raw FDT
+                elif dtb_data[:4] == bytes.fromhex('d7b7ab1e'):
+                    import struct
+                    magic, total, hdr_sz, ent_sz, count, entries_off, page_sz, version = struct.unpack_from('>8I', dtb_data, 0)
+                    if total > len(dtb_data) or hdr_sz < 32 or ent_sz < 32:
+                        raise ValueError('Invalid Android DTBO v1 header')
+                    for i in range(count):
+                        ent = entries_off + i * ent_sz
+                        size, offset = struct.unpack_from('>2I', dtb_data, ent)
+                        blob = dtb_data[offset:offset + size]
+                        assert len(blob) == size and blob[:4] == b'\xd0\x0d\xfe\xed', 'Invalid DTBO FDT entry'
+                else:
+                    raise ValueError('DTB section is neither raw FDT nor Android DTBO v1')
 
         return kernel_size, ramdisk_size, page_size, header_version
 ```
@@ -173,3 +188,8 @@ xxd boot_candidates/boot_A.img | head -1
 ## Why This Matters on MediaTek
 
 MediaTek devices store the DTB in a separate partition (`/dev/block/platform/bootdevice/by-name/dtb`), not in the boot image. When building a custom kernel, the new DTB won't match the old one on the dtb partition. Approaches A and B both embed the new DTB in the boot image, bypassing the separate partition entirely.
+
+
+### X657B-specific v2 header offset correction
+
+The supplied X657B boot dump confirms `header_size=1660` at offset 1644, `dtb_size=125165` at offset 1648, and `dtb_addr=0x47880000` at offset 1652. Its DTB section starts with an Android DTBO v1 wrapper, not raw FDT magic. Do not use older notes that read `dtb_size` at 1640 or assume the section starts directly with an FDT.
