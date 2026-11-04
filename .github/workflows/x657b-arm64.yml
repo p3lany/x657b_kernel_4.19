@@ -65,7 +65,7 @@ jobs:
           grep -qx 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' out/.config
           grep -qx 'CONFIG_ASHMEM=y' out/.config
 
-      - name: Build ARM64 kernel Image
+      - name: Build ARM64 kernel Image and compressed image
         run: |
           set -o pipefail
           make -j2 O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
@@ -74,25 +74,36 @@ jobs:
             OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
             STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            Image Image.gz 2>&1 | tee build.log
+            Image 2>&1 | tee build.log
+          make -j2 O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            arch/arm64/boot/Image.gz 2>&1 | tee -a build.log
 
-      - name: Verify output architecture
+      - name: Verify output architecture and compression
         run: |
-          file out/arch/arm64/boot/Image
+          set -e
           test -s out/arch/arm64/boot/Image
+          test -s out/arch/arm64/boot/Image.gz
+          file out/arch/arm64/boot/Image out/arch/arm64/boot/Image.gz
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("out/arch/arm64/boot/Image")
-          b = p.read_bytes()
-          if len(b) < 64 or b[0x38:0x3c] != b"ARM\x64":
-              raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
-          print(f"Verified AArch64 Image: {len(b)} bytes; ARM64 magic at 0x38")
-          import gzip
+          import gzip, hashlib, struct
+          image = Path("out/arch/arm64/boot/Image").read_bytes()
           packed = Path("out/arch/arm64/boot/Image.gz").read_bytes()
-          if gzip.decompress(packed) != b:
+          if len(image) < 64 or image[0x38:0x3c] != b"ARM\x64":
+              raise SystemExit("Output is not a valid AArch64 Linux Image: ARM64 magic missing at offset 0x38")
+          if gzip.decompress(packed) != image:
               raise SystemExit("Image.gz does not decompress byte-for-byte to Image")
-          print(f"Verified gzip Image.gz: {len(packed)} bytes; exact decompression match")
+          print(f"Image: {len(image)} bytes; text_offset=0x{struct.unpack_from('<Q', image, 8)[0]:x}; image_size={struct.unpack_from('<Q', image, 16)[0]}")
+          print(f"Image.gz: {len(packed)} bytes; exact decompression match")
+          print("SHA256 Image:", hashlib.sha256(image).hexdigest())
+          print("SHA256 Image.gz:", hashlib.sha256(packed).hexdigest())
           PY
+          cp out/.config x657b-arm64.config
 
       - name: Upload config and build logs
         if: always()
@@ -100,7 +111,7 @@ jobs:
         with:
           name: x657b-arm64-build-diagnostics
           path: |
-            out/.config
+            x657b-arm64.config
             defconfig.log
             build.log
           if-no-files-found: warn
