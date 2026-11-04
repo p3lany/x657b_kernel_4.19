@@ -115,9 +115,13 @@ def main():
     )
     args = parser.parse_args()
 
-    _, header, page, _, ramdisk, second, recovery, dtb, _ = parse_boot(
+    _, header, page, old_kernel, ramdisk, second, recovery, dtb, _ = parse_boot(
         args.stock_boot
     )
+    original_id = boot_id([old_kernel, ramdisk, second, recovery, dtb])
+    if header[ID_OFF:ID_OFF + 20] != original_id:
+        raise ValueError("stock boot image legacy SHA-1 ID does not match its sections")
+
     kernel = pathlib.Path(args.kernel_gz).read_bytes()
     if kernel[:2] != b"\x1f\x8b":
         raise ValueError("kernel payload is not gzip")
