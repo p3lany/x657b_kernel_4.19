@@ -46,6 +46,8 @@ struct pinctrl_state *eint_as_int, *eint_output0,
 		*eint_output1, *rst_output0, *rst_output1;
 const struct of_device_id touch_of_match[] = {
 	{ .compatible = "goodix,touch", },
+	/* X657B LK DTB uses mediatek,touch; its DTBO supplies TPD properties. */
+	{ .compatible = "mediatek,touch", },
 	{},
 };
 
