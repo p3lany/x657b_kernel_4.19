@@ -19,8 +19,8 @@
 - The driver was updated to `FRAME_WIDTH=720` and `FRAME_HEIGHT=1600` to match the stock device configuration. This is a source/config consistency correction, not proof of panel operation; final validation still requires matching the live stock panel parameters and a controlled display test.
 
 ## Boot-chain / DT findings
-- The supplied LK-embedded DTB is a valid version-17 DTB. Its root identifies MT6761; it describes four Cortex-A53 CPUs with PSCI enable-method and 512 MiB RAM at `0x40000000`.
-- The source tree also contains `arch/arm64/boot/dts/mediatek/mt6761.dts`; its CPU topology and base RAM range match those core LK-DTB facts. This is encouraging evidence that the SoC's DT description is usable in an AArch64 kernel, not proof that every board node matches.
+- The supplied LK-embedded DTB is a valid version-17 DTB. Its root identifies MT6761 and it describes four Cortex-A53 CPUs with PSCI enable-method. Its initial memory node declares 512 MiB at `0x40000000`, but this is not necessarily the final RAM map: the matching MTK LK source has an mblock routine that rewrites the memory node from detected DRAM/reserved-memory ranges before handoff.
+- The source tree also contains `arch/arm64/boot/dts/mediatek/mt6761.dts`; its CPU topology and base memory address match the core LK-DTB facts. This is encouraging evidence that the SoC's DT description is usable in an AArch64 kernel, not proof that every board node matches.
 - Important discrepancy: the LK-embedded DTB's generic `touch` node uses `mediatek,touch`, while the kernel MT6761 DTS uses `goodix,touch`. The embedded LK DTB therefore must not be treated as a drop-in replacement without checking the actual kernel handoff DTB and touchscreen bindings.
 - A DTB is not intrinsically ARM32 or ARM64; reuse with an AArch64 kernel depends on matching node bindings, addresses, interrupts, clocks, reserved memory, and driver expectations.
 - LK/TEE firmware strings contain references to 64-bit kernel handoff paths, but strings alone do not prove the active handoff path or establish SMC IDs. Those require code-level verification.
