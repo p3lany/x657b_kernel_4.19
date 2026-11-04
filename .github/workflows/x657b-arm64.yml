@@ -60,11 +60,17 @@ jobs:
           grep -qx 'CONFIG_COMPAT=y' out/.config
           grep -qx 'CONFIG_NR_CPUS=4' out/.config
           grep -qx 'CONFIG_TOUCHSCREEN_MTK_NT36572_COMMON=y' out/.config
-          grep -qx 'CONFIG_MTK_FLASHLIGHT_OCP81373=y' out/.config
+          grep -qx 'CONFIG_MTK_FLASHLIGHT=y' out/.config
+          grep -qx 'CONFIG_MTK_FLASHLIGHT_MT6370=y' out/.config
+          grep -qx 'CONFIG_MTK_SENSOR_SUPPORT=y' out/.config
+          grep -qx 'CONFIG_MTK_ACCELHUB=y' out/.config
+          grep -qx 'CONFIG_MTK_ALSPSHUB=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_ACCELEROMETER=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_ALSPS=y' out/.config
+          grep -qx 'CONFIG_CUSTOM_KERNEL_SENSORHUB=y' out/.config
           grep -qx 'CONFIG_LEDS_MT6357=y' out/.config
           grep -qx 'CONFIG_MTK_FINGERPRINT_SUPPORT=y' out/.config
           grep -qx 'CONFIG_MTK_CAMERA_ISP=y' out/.config
-          grep -qx 'CONFIG_MTK_SENSORS_1_0=y' out/.config
           grep -qx 'CONFIG_MTK_THERMAL=y' out/.config
           grep -Fqx 'CONFIG_MTK_COMBO_CHIP="CONSYS_6761"' out/.config
           grep -Fqx 'CONFIG_MTK_FINGERPRINT_SELECT="GF318M"' out/.config
@@ -80,10 +86,15 @@ jobs:
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image 2>&1 | tee build.log
 
+      - name: Compress bootloader kernel payload
+        run: gzip -n -9 -c out/arch/arm64/boot/Image > out/arch/arm64/boot/Image.gz
+
       - name: Verify output architecture
         run: |
           file out/arch/arm64/boot/Image
+          file out/arch/arm64/boot/Image.gz
           test -s out/arch/arm64/boot/Image
+          test -s out/arch/arm64/boot/Image.gz
           python3 - <<'PY'
           from pathlib import Path
           p = Path("out/arch/arm64/boot/Image")
@@ -114,5 +125,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: x657b-arm64-Image
-          path: out/arch/arm64/boot/Image
+          path: |
+            out/arch/arm64/boot/Image
+            out/arch/arm64/boot/Image.gz
           if-no-files-found: error
