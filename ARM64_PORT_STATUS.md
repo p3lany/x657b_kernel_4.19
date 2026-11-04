@@ -90,3 +90,8 @@
 A byte-level recheck of the supplied 32 MiB `boot-x657b-live.img` confirms the Android v2 header fields: `recovery_dtbo_size` at offset 1632, `recovery_dtbo_offset` at 1636, `header_size=1660` at 1644, `dtb_size=125165` at 1648, and `dtb_addr=0x47880000` at 1652. The embedded DTB section begins with an Android DTBO v1 container (`0xd7b7ab1e`) whose FDT entry begins at offset 64. Two checked-in repacking notes had incorrectly labeled offset 1644 as a DTBO-size field and offset 1640 as `dtb_size`; those instructions are corrected here. This ordering is defined by the [AOSP boot image header v2](https://source.android.com/docs/core/architecture/bootloader/boot-image-header) and the [AOSP `boot_img_hdr_v2` structure](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/android17-release/include/bootimg/bootimg.h).
 
 **Packaging guardrail:** Preserve the entire Android DTBO v1 wrapper and its FDT entry when reusing this device's boot DTB section. A modified kernel still invalidates the original AVB authentication; no candidate is safe to flash until AVB and bootloader state are verified.
+
+
+## Verified boot header page layout (2026-11-05)
+
+The supplied X657B image is Android boot header v2 with `page_size=2048`. The boot header occupies one page, so the kernel begins at file offset 2048. The 1660-byte v2 header structure fits within that page. A 4096-byte header page belongs to v3/v4. Verified file offsets: kernel 2048, ramdisk 10551296, DTB 11495424. The repository's old v2 notes incorrectly treated the header as two pages; they are corrected in this revision. AOSP documents the v2 one-page layout in [bootimg.h](https://android.googlesource.com/platform/system/tools/mkbootimg/+/refs/heads/master/include/bootimg/bootimg.h).
