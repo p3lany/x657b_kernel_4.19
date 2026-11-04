@@ -1,0 +1,65 @@
+name: Inspect X657B stock vendor kernel modules
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - arm64/x657b-board-overlay-v2
+    paths:
+      - '.github/workflows/inspect-x657b-vendor-modules.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: x657b-vendor-modules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout X657B vendor blobs
+        uses: actions/checkout@v4
+        with:
+          repository: noophyy/vendor_infinix_X657B
+          ref: eleven
+          path: vendor
+
+      - name: Install module inspection tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kmod binutils file
+
+      - name: Inspect module architecture and vermagic
+        run: |
+          set -e
+          report=vendor-module-report.txt
+          : > "$report"
+          echo "X657B Android 11 vendor module ABI audit" | tee -a "$report"
+          echo "Source: noophyy/vendor_infinix_X657B, branch eleven" | tee -a "$report"
+          echo | tee -a "$report"
+          for f in vendor/proprietary/vendor/lib/modules/*.ko; do
+            [ -f "$f" ] || continue
+            echo "=== $(basename "$f") ===" | tee -a "$report"
+            file "$f" | tee -a "$report"
+            modinfo -F name "$f" 2>&1 | sed 's/^/name: /' | tee -a "$report" || true
+            modinfo -F vermagic "$f" 2>&1 | sed 's/^/vermagic: /' | tee -a "$report" || true
+            modinfo -F depends "$f" 2>&1 | sed 's/^/depends: /' | tee -a "$report" || true
+            readelf -h "$f" 2>/dev/null | grep -E 'Class:|Machine:' | sed 's/^/ELF: /' | tee -a "$report" || true
+            echo | tee -a "$report"
+          done
+          echo "=== modules.load ===" | tee -a "$report"
+          cat vendor/proprietary/vendor/lib/modules/modules.load 2>/dev/null | tee -a "$report" || true
+          echo "=== module hashes ===" | tee -a "$report"
+          sha256sum vendor/proprietary/vendor/lib/modules/*.ko | tee -a "$report"
+
+      - name: Upload vendor module audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-vendor-module-abi-audit
+          path: |
+            vendor-module-report.txt
+            vendor/proprietary/vendor/lib/modules/*.ko
+            vendor/proprietary/vendor/lib/modules/modules.load
+          if-no-files-found: error
