@@ -7,6 +7,12 @@ on:
       - arm64/x657b-board-overlay-v2
     paths:
       - '.github/workflows/build-x657b-arm64-connectivity.yml'
+      - 'arch/arm64/**'
+      - 'drivers/**'
+      - 'include/**'
+      - 'kernel/**'
+      - 'scripts/**'
+      - 'Makefile'
 
 permissions:
   contents: read
