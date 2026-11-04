@@ -42,8 +42,11 @@ jobs:
             STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             x657b_arm64_defconfig 2>&1 | tee defconfig.log
-          make O=out ARCH=arm64 LLVM=1 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             olddefconfig 2>&1 | tee -a defconfig.log
           grep -E '^(CONFIG_ARM64|CONFIG_MACH_MT6761|CONFIG_COMPAT|CONFIG_NR_CPUS)=' out/.config
@@ -55,8 +58,11 @@ jobs:
       - name: Build ARM64 kernel Image
         run: |
           set -o pipefail
-          make -j2 O=out ARCH=arm64 LLVM=1 \
-            CROSS_COMPILE=aarch64-linux-gnu- \
+          make -j2 O=out ARCH=arm64 CC='clang-11 --target=aarch64-linux-gnu' \
+            LD=aarch64-linux-gnu-ld AR=aarch64-linux-gnu-ar \
+            NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
+            OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
+            STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             Image 2>&1 | tee build.log
 
