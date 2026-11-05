@@ -1,0 +1,124 @@
+name: X657B BL31 / TEE1 static audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      tee1_url:
+        description: "HTTPS URL to the exact tee1.img dump (the firmware itself is not committed or uploaded as an artifact)"
+        required: true
+        type: string
+      expected_sha256:
+        description: "Optional expected SHA-256; leave empty if not known"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout audit scripts
+        uses: actions/checkout@v4
+
+      - name: Validate input and download TEE1
+        env:
+          TEE1_URL: ${{ inputs.tee1_url }}
+          EXPECTED_SHA256: ${{ inputs.expected_sha256 }}
+        run: |
+          set -euo pipefail
+          case "$TEE1_URL" in
+            https://*) ;;
+            *) echo "::error::tee1_url must use HTTPS"; exit 2 ;;
+          esac
+          mkdir -p audit-out
+          curl --fail --location --retry 3 --retry-all-errors \
+            --proto '=https' --tlsv1.2 "$TEE1_URL" -o tee1.img
+          test -s tee1.img
+          actual="$(sha256sum tee1.img | awk '{print $1}')"
+          echo "TEE1_SIZE=$(stat -c %s tee1.img)" | tee audit-out/input.txt
+          echo "TEE1_SHA256=$actual" | tee -a audit-out/input.txt
+          if [ -n "$EXPECTED_SHA256" ] && [ "$actual" != "$EXPECTED_SHA256" ]; then
+            echo "::error::TEE1 SHA-256 mismatch"
+            exit 3
+          fi
+          file tee1.img | tee -a audit-out/input.txt
+          if readelf -h tee1.img > audit-out/readelf.txt 2>&1; then
+            echo "ELF header parsed; see readelf.txt"
+          else
+            echo "Not a directly readable ELF (may be a vendor image/container)." | tee -a audit-out/input.txt
+          fi
+
+      - name: Install AArch64 binutils and Java
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y binutils-aarch64-linux-gnu curl unzip python3 openjdk-21-jdk
+          aarch64-linux-gnu-objdump --version | head -1
+          java -version
+
+      - name: Disassemble as raw AArch64 for triage
+        run: |
+          set -euo pipefail
+          aarch64-linux-gnu-objdump -D -b binary -m aarch64 --adjust-vma=0x0 tee1.img > audit-out/tee1-raw-aarch64.disasm
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines = Path("audit-out/tee1-raw-aarch64.disasm").read_text(errors="replace").splitlines()
+          pat = re.compile(r'\b(smc|hvc|eret|br|blr|ret|mrs|msr|isb|dsb)\b|spsr_el3|scr_el3|elr_el3|sctlr_el3|esr_el3|mpidr_el1|currentel', re.I)
+          hits = [i for i, line in enumerate(lines) if pat.search(line)]
+          out = [
+              "Triage only: raw binary disassembled at artificial base 0x0.",
+              "Offsets below are file-relative unless a valid image mapping is established.",
+              "Register values and argument semantics are NOT inferred automatically.",
+              f"Matching instruction/register lines: {len(hits)}",
+              ""
+          ]
+          seen = set()
+          for i in hits:
+              lo, hi = max(0, i-12), min(len(lines), i+13)
+              if any(j in seen for j in range(lo, hi)):
+                  continue
+              seen.update(range(lo, hi))
+              out.extend(lines[lo:hi])
+              out.append("")
+          Path("audit-out/tee1-control-flow-windows.txt").write_text("\n".join(out))
+          print(f"Collected {len(hits)} candidate lines into control-flow windows.")
+          PY
+
+      - name: Run Ghidra headless analysis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ghidra-dist /tmp/ghidra-project
+          gh release download --repo NationalSecurityAgency/ghidra \
+            --pattern 'ghidra_*_PUBLIC_*.zip' --dir /tmp/ghidra-dist
+          archive="$(find /tmp/ghidra-dist -maxdepth 1 -name 'ghidra_*_PUBLIC_*.zip' -print -quit)"
+          test -n "$archive"
+          unzip -q "$archive" -d /tmp/ghidra-dist/unpacked
+          headless="$(find /tmp/ghidra-dist/unpacked -path '*/support/analyzeHeadless' -type f -print -quit)"
+          test -n "$headless"
+          chmod +x "$headless"
+          set +e
+          timeout 25m "$headless" /tmp/ghidra-project X657B_TEE1 \
+            -import "$PWD/tee1.img" -loader BinaryLoader \
+            -loader-baseAddr 0x0 -processor AARCH64:LE:64:v8A \
+            -analysisTimeoutPerFile 900 \
+            > audit-out/ghidra-headless.log 2>&1
+          status=$?
+          set -e
+          echo "GHIDRA_EXIT=$status" | tee audit-out/ghidra-status.txt
+          if [ "$status" -ne 0 ]; then
+            echo "Ghidra did not complete; inspect its log. Binutils output is still retained."
+          fi
+
+      - name: Upload analysis only (never upload tee1.img or the Ghidra project)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x657b-tee1-static-audit
+          path: audit-out/
+          if-no-files-found: error
+          retention-days: 7
