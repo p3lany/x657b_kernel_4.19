@@ -54,7 +54,7 @@ echo "=== Configure X657B ARM64 ==="
 make -C "$ROOT" "${MAKE_ARGS[@]}" "$DEFCONFIG"
 make -C "$ROOT" "${MAKE_ARGS[@]}" olddefconfig
 
-for option in CONFIG_ARM64 CONFIG_COMPAT CONFIG_MACH_MT6761 CONFIG_MODVERSIONS; do
+for option in CONFIG_ARM64 CONFIG_COMPAT CONFIG_COMPAT_BINFMT_ELF CONFIG_MACH_MT6761 CONFIG_MODVERSIONS; do
     grep -qx "$option=y" "$OUT/.config" || {
         echo "ERROR: required option $option is not enabled" >&2
         exit 1
@@ -68,6 +68,13 @@ DIST="$OUT/dist"
 mkdir -p "$DIST"
 cp "$OUT/arch/arm64/boot/Image" "$DIST/Image"
 gzip -n -9 -c "$DIST/Image" > "$DIST/Image.gz"
+magic="$(od -An -tx1 -j 56 -N 4 "$DIST/Image" | tr -d ' \\n')"
+[ "$magic" = "41524d64" ] || {
+    echo "ERROR: Image does not contain the AArch64 ARMd magic at offset 0x38" >&2
+    exit 1
+}
+gzip -t "$DIST/Image.gz"
+gzip -dc "$DIST/Image.gz" | cmp - "$DIST/Image"
 cp "$OUT/.config" "$DIST/config"
 cp "$OUT/Module.symvers" "$DIST/Module.symvers"
 cp "$OUT/include/config/kernel.release" "$DIST/kernel.release"
