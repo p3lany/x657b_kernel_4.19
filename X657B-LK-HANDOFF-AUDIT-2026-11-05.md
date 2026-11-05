@@ -36,3 +36,12 @@ Saved `boot-x657b-live.img` SHA-256 is `122e9ede780cdcaad26df4e6b43749f06de9c699
 - No flash/test is authorized until a reversible recovery path is established.
 
 Reference MT6761 LK sources: [SMC ID table](https://github.com/svoboda18/lk/blob/37ec8bcbc4361c0e267617f517d154656804c17a/platform/mt6761/include/platform/plat_smc_id_table.h), [memory layout](https://github.com/svoboda18/lk/blob/37ec8bcbc4361c0e267617f517d154656804c17a/platform/mt6761/include/platform/memory_layout.h), [platform rules](https://github.com/svoboda18/lk/blob/37ec8bcbc4361c0e267617f517d154656804c17a/platform/mt6761/rules.mk).
+
+
+## AVB behavior found in the matching MT6761 LK source
+
+The MT6761 `platform/common/boot/avb20/load_vfy_boot.c` path calls `avb_slot_verify()`. Its linked libavb code checks the top-level vbmeta `VERIFICATION_DISABLED` flag; when set, it loads requested partitions without processing hash, hashtree, or chained-vbmeta descriptors. The handset's saved top-level vbmeta flags are `3`, including `VERIFICATION_DISABLED`.
+
+This makes the candidate's unsigned embedded vbmeta and the DTBO descriptor mismatch **unlikely** to be boot blockers under the matching LK/libavb behavior. The secure policy's `img_auth_required` value and the exact runtime path have not been instrumented on the handset, so this is not a boot-test result.
+
+AOSP reference: [libavb slot verification](https://android.googlesource.com/platform/external/avb/+/android17-release/libavb/avb_slot_verify.h).
