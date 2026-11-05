@@ -64,3 +64,17 @@ The candidate base FDT's main PMIC is `mediatek,mt6357`; its accdet node is `med
 ### MTK secure-policy caveat
 
 The MT6761 `get_vfy_policy()` result is selected from MediaTek secure-policy bits associated with SBC/lock state. The reference policy headers include both verification-enabled and verification-disabled states. Android `ro.boot.*` properties and AVB flags alone do not establish the DTBO `img_auth_required` value; the handset's `seccfg`/secure-policy state has not been read. The currently running system's use of this DTBO suggests MTK auth succeeds or is not required, but the appended certificate chain has not been independently verified.
+
+
+## Hardware parity still incomplete
+
+- Display: current config selects the X657B NT36525B 720x1600 LCM; a public reference DTBO reports NT35521 720x1280. This may be a different panel variant; inspect the actual handset DTBO before changing the driver.
+- Touch: the kernel driver accepts the base DTB's `mediatek,touch` compatible; overlay-specific touch parameters remain unverified.
+- Rear flash: MT6370 flashlight support is enabled, but OCP81373 support is not verified.
+- Fingerprint: GF318M is selected and TEEI v300 support exists, but the sensor driver/runtime path is not verified.
+- Camera sensor coverage is partial.
+- Six AArch64 connectivity modules were built from donor MT6761 sources; handset runtime compatibility is not proven. Stock ARM32 vendor modules cannot be loaded by this AArch64 kernel.
+- Kconfig warns that `MTK_SECURE_MEM_SUPPORT` is selected with unmet Trustonic/GZ dependencies; likely a protected-media/fingerprint gap rather than a boot blocker.
+- `CONFIG_PSTORE_RAM` is enabled but the base FDT has no ramoops reserved-memory node; do not invent a RAM range for panic logging.
+
+These are hardware-parity tasks after first kernel entry, not evidence that the LK ARM64 handoff is wrong.
