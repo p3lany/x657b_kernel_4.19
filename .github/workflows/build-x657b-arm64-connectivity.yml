@@ -222,15 +222,15 @@ jobs:
           cp module-package/*.ko complete-package/modules/
           cp module-package/module-abi-report.txt complete-package/
           {
-            printf 'Git commit: %s\\n' "$(git rev-parse HEAD)"
-            printf 'Kernel release: %s\\n' "$(cat out/include/config/kernel.release)"
-            printf 'Image SHA-256: %s\\n' "$(sha256sum complete-package/Image | awk '{print $1}')"
-            printf 'Image.gz SHA-256: %s\\n' "$(sha256sum complete-package/Image.gz | awk '{print $1}')"
-            printf 'Kernel Module.symvers SHA-256: %s\\n' "$(sha256sum complete-package/Module.symvers | awk '{print $1}')"
-            printf 'Common Module.symvers SHA-256: %s\\n' "$(sha256sum complete-package/common-Module.symvers | awk '{print $1}')"
-            printf 'Config SHA-256: %s\\n' "$(sha256sum complete-package/config | awk '{print $1}')"
-            printf 'Compiler: %s\\n' "$(clang-11 --version | head -n 1)"
-            printf 'Linker: %s\\n' "$(aarch64-linux-gnu-ld --version | head -n 1)"
+            printf 'Git commit: %s\n' "$(git rev-parse HEAD)"
+            printf 'Kernel release: %s\n' "$(cat out/include/config/kernel.release)"
+            printf 'Image SHA-256: %s\n' "$(sha256sum complete-package/Image | awk '{print $1}')"
+            printf 'Image.gz SHA-256: %s\n' "$(sha256sum complete-package/Image.gz | awk '{print $1}')"
+            printf 'Kernel Module.symvers SHA-256: %s\n' "$(sha256sum complete-package/Module.symvers | awk '{print $1}')"
+            printf 'Common Module.symvers SHA-256: %s\n' "$(sha256sum complete-package/common-Module.symvers | awk '{print $1}')"
+            printf 'Config SHA-256: %s\n' "$(sha256sum complete-package/config | awk '{print $1}')"
+            printf 'Compiler: %s\n' "$(clang-11 --version | head -n 1)"
+            printf 'Linker: %s\n' "$(aarch64-linux-gnu-ld --version | head -n 1)"
           } > complete-package/BUILD-MANIFEST.txt
           (cd complete-package && sha256sum Image Image.gz config Module.symvers common-Module.symvers kernel.release modules/*.ko > SHA256SUMS)
           tar -czf x657b-arm64-complete-build.tar.gz -C complete-package .
