@@ -208,6 +208,36 @@ jobs:
             readelf -h "$f" | grep -q 'Class:.*ELF64'
             readelf -h "$f" | grep -q 'Machine:.*AArch64'
           done
+          python3 - <<'PY'
+          import glob, subprocess, sys
+          symvers = {}
+          for path in ("out/Module.symvers", "out/src/common/Module.symvers", "out/src/adaptor/Module.symvers"):
+              with open(path, encoding="utf-8", errors="replace") as stream:
+                  for line in stream:
+                      fields = line.split()
+                      if len(fields) >= 2:
+                          symvers.setdefault(fields[1], set()).add(fields[0].lower())
+          failures = []
+          for module in sorted(glob.glob("module-package/*.ko")):
+              output = subprocess.check_output(["modprobe", "--dump-modversions", module], text=True)
+              count = 0
+              for line in output.splitlines():
+                  fields = line.split()
+                  if len(fields) != 2:
+                      continue
+                  crc, symbol = fields
+                  count += 1
+                  known = symvers.get(symbol)
+                  if not known:
+                      failures.append(f"{module}: no Module.symvers provider for {symbol}")
+                  elif crc.lower() not in known:
+                      failures.append(f"{module}: CRC mismatch for {symbol}: module={crc}, providers={','.join(sorted(known))}")
+              print(f"{module}: checked {count} versioned imports")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+          print("All module symbol CRCs match kernel/common/adaptor Module.symvers.")
+          PY
           printf '%s\n' wmt_drv.ko wmt_chrdev_wifi.ko wlan_drv_gen4m.ko bt_drv.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
           printf 'Kernel release: %s\n' "$krel" > module-package/README.txt
           printf 'Kernel Image SHA-256: ' >> module-package/README.txt
