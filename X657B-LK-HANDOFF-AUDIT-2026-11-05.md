@@ -54,3 +54,8 @@ The 3,707 bytes after the Android DT table are not random padding: the captured 
 The matching MT6761 LK source's `load_dtbo_buffer()` validates the table, consults the `dtbo` secure-image policy, optionally verifies the MTK cert chain via `sec_img_auth_init()` / `sec_img_auth()`, then selects the overlay by ODM index. This MTK image-auth path is separate from AVB hash-descriptor processing. The current device boots using this same installed DTBO, but the actual overlay's panel/touch content still needs inspection.
 
 References: [MTK cert1/cert2 format](https://github.com/AgentFabulous/basic_img_signer), [MTK LK certificate-container analysis](https://github.com/DexopT/LK-Bootloader-Security-Research/blob/master/docs/05-stage2-lk-bootloader.md).
+
+
+## Device-specific PMIC module correction
+
+The candidate base FDT's main PMIC is `mediatek,mt6357`; its accdet node is `mediatek,mt6357-accdet`, and its gauge/charger/LED nodes are MT6357. The generated config correctly enables MT6357 battery and accdet support but also builds `mt6359_battery.ko` and `mt6359-accdet.ko`. The MT6359 gauge/accdet drivers match MT6359 compatibles, absent from this FDT. The previous module build emitted duplicate `accdet_late_init` exports from MT6357 and MT6359 accdet modules. The next config revision will disable `CONFIG_BATTERY_MT6359` and `CONFIG_SND_SOC_MT6359_ACCDET`, retain MT6357, and package all in-tree modules as well as the six external connectivity modules.
