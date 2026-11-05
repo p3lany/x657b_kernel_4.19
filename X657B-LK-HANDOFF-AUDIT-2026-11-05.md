@@ -59,3 +59,8 @@ References: [MTK cert1/cert2 format](https://github.com/AgentFabulous/basic_img_
 ## Device-specific PMIC module correction
 
 The candidate base FDT's main PMIC is `mediatek,mt6357`; its accdet node is `mediatek,mt6357-accdet`, and its gauge/charger/LED nodes are MT6357. The generated config correctly enables MT6357 battery and accdet support but also builds `mt6359_battery.ko` and `mt6359-accdet.ko`. The MT6359 gauge/accdet drivers match MT6359 compatibles, absent from this FDT. The previous module build emitted duplicate `accdet_late_init` exports from MT6357 and MT6359 accdet modules. The next config revision will disable `CONFIG_BATTERY_MT6359` and `CONFIG_SND_SOC_MT6359_ACCDET`, retain MT6357, and package all in-tree modules as well as the six external connectivity modules.
+
+
+### MTK secure-policy caveat
+
+The MT6761 `get_vfy_policy()` result is selected from MediaTek secure-policy bits associated with SBC/lock state. The reference policy headers include both verification-enabled and verification-disabled states. Android `ro.boot.*` properties and AVB flags alone do not establish the DTBO `img_auth_required` value; the handset's `seccfg`/secure-policy state has not been read. The currently running system's use of this DTBO suggests MTK auth succeeds or is not required, but the appended certificate chain has not been independently verified.
