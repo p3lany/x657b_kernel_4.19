@@ -62,3 +62,22 @@ Then inspect the exact failed image bytes and SHA-256 to verify that the file an
 - MT6739 example setting a 50 MiB decompression limit: https://huaweicloud.csdn.net/6510fe3f993dd34278ee5730.html
 
 This document records a hypothesis and the evidence required to confirm or reject it. It is not a claim that the root cause has been proven.
+
+
+## New device-LK string-scan evidence (2026-11-05)
+
+The user ran a read-only Python byte/string scan on both 1 MiB LK partitions.
+
+- `lk.img` SHA-256: `fce1a35be6a10e0635da23f12800a730458bf498c6617442e14f4a9ff66a2d60`.
+- `lk2.img` SHA-256: `8b77ad4425ed4ed255d4becd4630f8fc802eea4642e5461e6cd9ca7342a00480`.
+- Both contain the same relevant printable strings, including `lk_jump64`, `[LK]jump to K64 %x`, `64 bits kernel`, `64 bit kernel can't boot at 0x%08x`, `decompress kernel image...`, and `decompress kernel image fail!!!`.
+- The string `decompress kernel image fail!!!` is at file offset `0x8675c` in both images.
+- Little-endian byte patterns for `0x01c00000`, `0x03200000`, and `0x01d80000` occur at identical offsets in both images: respectively `0x26f2, 0x696b2, 0x9cd4e`; `0x434f6, 0x4bd6f, 0x6a732`; and `0x697d2`.
+
+Interpretation: both LK images include ARM64 boot and decompression-failure code. Identical string/constant offsets suggest substantial commonality, but do not establish that LK2 is used on normal boot or that either has the generic 28 MiB decompression cap. The three constant byte patterns may be data, literal pools, or incidental occurrences; their locations alone do not identify their meaning. The user's Rizin command did not execute successfully, so no cross-references or disassembly were obtained.
+
+A later attempted Rizin/Python command was visibly truncated in the terminal output after the first target. Treat that as a failed attempt, not as evidence of no cross-references.
+
+## Exact-image identity remains unresolved
+
+The user selected `/sdcard/Download/boot-x657b-live.img` as the failed image for a Catbox upload, producing `https://files.catbox.moe/sc03ma.img`. The user later supplied a different URL named `x657b-arm64-boot-unsigned-test-1.img`. Neither binary has been successfully retrieved for inspection in this environment. Do not conflate them. The previous structural report describes `x657b-arm64-boot-unsigned-test.img`, which is a third filename and is not proven to be the flashed file.
