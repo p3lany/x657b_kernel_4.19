@@ -45,3 +45,12 @@ The MT6761 `platform/common/boot/avb20/load_vfy_boot.c` path calls `avb_slot_ver
 This makes the candidate's unsigned embedded vbmeta and the DTBO descriptor mismatch **unlikely** to be boot blockers under the matching LK/libavb behavior. The secure policy's `img_auth_required` value and the exact runtime path have not been instrumented on the handset, so this is not a boot-test result.
 
 AOSP reference: [libavb slot verification](https://android.googlesource.com/platform/external/avb/+/android17-release/libavb/avb_slot_verify.h).
+
+
+## DTBO partition structure
+
+The 3,707 bytes after the Android DT table are not random padding: the captured tail begins with MediaTek image-header magic `88 16 88 58`, the ASCII `cert1` marker, and MTK extended-header magic `89 16 89 58`. The DT table size (170,645) plus this tail (3,707) equals the vbmeta descriptor image size (174,352).
+
+The matching MT6761 LK source's `load_dtbo_buffer()` validates the table, consults the `dtbo` secure-image policy, optionally verifies the MTK cert chain via `sec_img_auth_init()` / `sec_img_auth()`, then selects the overlay by ODM index. This MTK image-auth path is separate from AVB hash-descriptor processing. The current device boots using this same installed DTBO, but the actual overlay's panel/touch content still needs inspection.
+
+References: [MTK cert1/cert2 format](https://github.com/AgentFabulous/basic_img_signer), [MTK LK certificate-container analysis](https://github.com/DexopT/LK-Bootloader-Security-Research/blob/master/docs/05-stage2-lk-bootloader.md).
