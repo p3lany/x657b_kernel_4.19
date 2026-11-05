@@ -105,6 +105,9 @@ jobs:
           grep -qx 'CONFIG_MTK_COMBO_GPS=y' out/.config
           grep -Fqx 'CONFIG_MTK_FM_CHIP="MT6631_FM"' out/.config
           grep -Fqx 'CONFIG_MICROTRUST_TEE_VERSION="300"' out/.config
+          grep -qx 'CONFIG_MTK_TEE_GP_SUPPORT=y' out/.config
+          grep -qx '# CONFIG_BATTERY_MT6359 is not set' out/.config
+          grep -qx '# CONFIG_SND_SOC_MT6359_ACCDET is not set' out/.config
 
       - name: Build ARM64 kernel and in-tree modules
         run: |
@@ -114,7 +117,7 @@ jobs:
             NM=aarch64-linux-gnu-nm OBJCOPY=aarch64-linux-gnu-objcopy \
             OBJDUMP=aarch64-linux-gnu-objdump READELF=aarch64-linux-gnu-readelf \
             STRIP=aarch64-linux-gnu-strip CROSS_COMPILE=aarch64-linux-gnu- \
-            CROSS_COMPILE_ARM32=arm-linux-gnueabi- Image modules 2>&1 | tee kernel-modules-build.log
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- CONFIG_DEBUG_SECTION_MISMATCH=y Image modules 2>&1 | tee kernel-modules-build.log
 
       - name: Stage donor sources and X657B compatibility overlay
         run: |
