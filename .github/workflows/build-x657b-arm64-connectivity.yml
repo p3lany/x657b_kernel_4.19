@@ -238,7 +238,63 @@ jobs:
               sys.exit(1)
           print("All module symbol CRCs match kernel/common/adaptor Module.symvers.")
           PY
+          # Preserve and validate every in-tree module produced by `make modules`.
+          mkdir -p in-tree-module-package
+          mapfile -t in_tree_modules < <(find out -path 'out/src' -prune -o -type f -name '*.ko' -print | sort)
+          if (( ${#in_tree_modules[@]} == 0 )); then
+            echo "No in-tree modules were produced despite the configured module set" >&2
+            exit 1
+          fi
+          : > in-tree-module-package/module-abi-report.txt
+          for f in "${in_tree_modules[@]}"; do
+            rel="${f#out/}"
+            dest="in-tree-module-package/${rel}"
+            mkdir -p "$(dirname "$dest")"
+            cp "$f" "$dest"
+            echo "=== $rel ===" | tee -a in-tree-module-package/module-abi-report.txt
+            file "$dest" | tee -a in-tree-module-package/module-abi-report.txt
+            readelf -h "$dest" | grep -E 'Class:|Machine:' | tee -a in-tree-module-package/module-abi-report.txt
+            vermagic=$(modinfo -F vermagic "$dest")
+            echo "vermagic: $vermagic" | tee -a in-tree-module-package/module-abi-report.txt
+            echo "$vermagic" | grep -q "^$krel "
+            readelf -h "$dest" | grep -q 'Class:.*ELF64'
+            readelf -h "$dest" | grep -q 'Machine:.*AArch64'
+          done
+          python3 - <<'PY'
+          import glob, subprocess, sys
+          symvers = {}
+          with open("out/Module.symvers", encoding="utf-8", errors="replace") as stream:
+              for line in stream:
+                  fields = line.split()
+                  if len(fields) >= 2:
+                      symvers.setdefault(fields[1], set()).add(fields[0].lower())
+          failures = []
+          count = 0
+          for module in sorted(glob.glob("in-tree-module-package/**/*.ko", recursive=True)):
+              output = subprocess.check_output(["modprobe", "--dump-modversions", module], text=True)
+              imports = 0
+              for line in output.splitlines():
+                  fields = line.split()
+                  if len(fields) != 2:
+                      continue
+                  crc, symbol = fields
+                  imports += 1
+                  known = symvers.get(symbol)
+                  if not known:
+                      failures.append(f"{module}: no kernel Module.symvers provider for {symbol}")
+                  elif crc.lower() not in known:
+                      failures.append(f"{module}: CRC mismatch for {symbol}: module={crc}, kernel={','.join(sorted(known))}")
+              print(f"{module}: checked {imports} versioned imports")
+              count += 1
+          print(f"Validated {count} in-tree modules.")
+          if failures:
+              print("\n".join(failures), file=sys.stderr)
+              sys.exit(1)
+          print("All in-tree module symbol CRCs match the kernel Module.symvers.")
+          PY
+          find in-tree-module-package -type f -name '*.ko' -print0 | sort -z | xargs -0 -r sha256sum > in-tree-module-package/SHA256SUMS
           printf '%s\n' wmt_drv.ko wmt_chrdev_wifi.ko wlan_drv_gen4m.ko bt_drv.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
+ wmt_chrdev_wifi.ko wlan_drv_gen4m.ko bt_drv.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
           printf 'Kernel release: %s\n' "$krel" > module-package/README.txt
           printf 'Kernel Image SHA-256: ' >> module-package/README.txt
           sha256sum out/arch/arm64/boot/Image | awk '{print $1}' >> module-package/README.txt
@@ -260,6 +316,8 @@ jobs:
           cp out/src/adaptor/Module.symvers complete-package/adaptor-Module.symvers
           cp module-package/*.ko complete-package/modules/
           cp module-package/module-abi-report.txt complete-package/
+          mkdir -p complete-package/in-tree-modules
+          cp -a in-tree-module-package/. complete-package/in-tree-modules/
           {
             printf 'Git commit: %s\n' "$(git rev-parse HEAD)"
             printf 'Kernel release: %s\n' "$(cat out/include/config/kernel.release)"
@@ -272,7 +330,7 @@ jobs:
             printf 'Compiler: %s\n' "$(clang-11 --version | head -n 1)"
             printf 'Linker: %s\n' "$(aarch64-linux-gnu-ld --version | head -n 1)"
           } > complete-package/BUILD-MANIFEST.txt
-          (cd complete-package && sha256sum Image Image.gz config Module.symvers common-Module.symvers adaptor-Module.symvers kernel.release modules/*.ko > SHA256SUMS)
+          (cd complete-package && sha256sum Image Image.gz config Module.symvers common-Module.symvers adaptor-Module.symvers kernel.release modules/*.ko > SHA256SUMS && find in-tree-modules -type f -name '*.ko' -print0 | sort -z | xargs -0 -r sha256sum >> SHA256SUMS)
           tar -czf x657b-arm64-complete-build.tar.gz -C complete-package .
 
       - name: Upload kernel module bundle and diagnostics
@@ -291,6 +349,7 @@ jobs:
             out/include/config/kernel.release
             out/arch/arm64/boot/Image
             module-package/
+            in-tree-module-package/
             kernel-modules-build.log
             out/module-*.log
           if-no-files-found: warn
