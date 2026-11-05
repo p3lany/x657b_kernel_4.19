@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - arm64/x657b-board-overlay-v2
+      - arm64/ci-complete-artifact
     paths:
       - '.github/workflows/build-x657b-arm64-connectivity.yml'
       - 'arch/arm64/**'
@@ -207,6 +208,33 @@ jobs:
           sha256sum module-package/*.ko > module-package/SHA256SUMS
           tar -czf x657b-arm64-connectivity-modules.tar.gz -C module-package .
 
+      - name: Assemble matched kernel and module package
+        run: |
+          set -euo pipefail
+          mkdir -p complete-package/modules
+          cp out/arch/arm64/boot/Image complete-package/Image
+          gzip -n -9 -c out/arch/arm64/boot/Image > complete-package/Image.gz
+          cp out/.config complete-package/config
+          cp out/Module.symvers complete-package/Module.symvers
+          cp out/include/config/kernel.release complete-package/kernel.release
+          test -s out/src/common/Module.symvers
+          cp out/src/common/Module.symvers complete-package/common-Module.symvers
+          cp module-package/*.ko complete-package/modules/
+          cp module-package/module-abi-report.txt complete-package/
+          {
+            printf 'Git commit: %s\\n' "$(git rev-parse HEAD)"
+            printf 'Kernel release: %s\\n' "$(cat out/include/config/kernel.release)"
+            printf 'Image SHA-256: %s\\n' "$(sha256sum complete-package/Image | awk '{print $1}')"
+            printf 'Image.gz SHA-256: %s\\n' "$(sha256sum complete-package/Image.gz | awk '{print $1}')"
+            printf 'Kernel Module.symvers SHA-256: %s\\n' "$(sha256sum complete-package/Module.symvers | awk '{print $1}')"
+            printf 'Common Module.symvers SHA-256: %s\\n' "$(sha256sum complete-package/common-Module.symvers | awk '{print $1}')"
+            printf 'Config SHA-256: %s\\n' "$(sha256sum complete-package/config | awk '{print $1}')"
+            printf 'Compiler: %s\\n' "$(clang-11 --version | head -n 1)"
+            printf 'Linker: %s\\n' "$(aarch64-linux-gnu-ld --version | head -n 1)"
+          } > complete-package/BUILD-MANIFEST.txt
+          (cd complete-package && sha256sum Image Image.gz config Module.symvers common-Module.symvers kernel.release modules/*.ko > SHA256SUMS)
+          tar -czf x657b-arm64-complete-build.tar.gz -C complete-package .
+
       - name: Upload kernel module bundle and diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -214,6 +242,13 @@ jobs:
           name: x657b-arm64-connectivity-modules
           path: |
             x657b-arm64-connectivity-modules.tar.gz
+            x657b-arm64-complete-build.tar.gz
+            complete-package/BUILD-MANIFEST.txt
+            complete-package/SHA256SUMS
+            out/Module.symvers
+            out/.config
+            out/include/config/kernel.release
+            out/arch/arm64/boot/Image
             module-package/
             kernel-modules-build.log
             out/module-*.log
