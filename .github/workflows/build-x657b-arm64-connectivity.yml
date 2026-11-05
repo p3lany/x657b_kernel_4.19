@@ -294,7 +294,6 @@ jobs:
           PY
           find in-tree-module-package -type f -name '*.ko' -print0 | sort -z | xargs -0 -r sha256sum > in-tree-module-package/SHA256SUMS
           printf '%s\n' wmt_drv.ko wmt_chrdev_wifi.ko wlan_drv_gen4m.ko bt_drv.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
- wmt_chrdev_wifi.ko wlan_drv_gen4m.ko bt_drv.ko gps_drv.ko fmradio_drv.ko > module-package/modules.load
           printf 'Kernel release: %s\n' "$krel" > module-package/README.txt
           printf 'Kernel Image SHA-256: ' >> module-package/README.txt
           sha256sum out/arch/arm64/boot/Image | awk '{print $1}' >> module-package/README.txt
